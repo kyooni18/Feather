@@ -6,7 +6,7 @@
 
 주요 파일:
 - `System/FeatherRuntime/FSResourceTracker.h`
-- `System/FeatherRuntime/FSResourceTracker.c`
+- `System/FeatherRuntime/FSResourceTracker.cpp`
 
 이 모듈은 **링크 가능한 확장** 입니다 — 코어 `Feather` 라이브러리에 의존하는 별도 라이브러리(`FeatherResourceTracking`)로 빌드됩니다. 이 확장을 링크하지 않으면 기본 `Feather` 모델은 변경되지 않습니다.
 

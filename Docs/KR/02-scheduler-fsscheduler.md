@@ -6,7 +6,7 @@
 
 주요 파일:
 - `System/FeatherRuntime/FSScheduler.h`
-- `System/FeatherRuntime/FSScheduler.c`
+- `System/FeatherRuntime/FSScheduler.cpp`
 
 ## 확장 모델
 

@@ -1,9 +1,9 @@
 /* FSTime common layer.
  *
  * Platform-specific implementations live in the companion backend files:
- *   FSTime_posix.c    — Linux, macOS, ESP32, and other POSIX systems
- *   FSTime_windows.c  — Windows (_WIN32)
- *   FSTime_arduino.c  — Arduino (ARDUINO)
+ *   FSTime_posix.cpp    — Linux, macOS, ESP32, and other POSIX systems
+ *   FSTime_windows.cpp  — Windows (_WIN32)
+ *   FSTime_arduino.cpp  — Arduino (ARDUINO)
  *
  * This file only defines the FSTime_init singleton (which references the
  * public functions provided by exactly one of the backends above) and the

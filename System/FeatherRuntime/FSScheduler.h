@@ -36,34 +36,34 @@ struct FSScheduler;
 typedef struct FSSchedulerInstantTask {
   void (*task)(void *context); /* function pointer */
   void *context;               /* data pointer passed to task callback */
+  uint8_t priority;            /* FSScheduler_Priority_BACKGROUND/UI/INTERACTIVE */
   uint64_t id;                      /* assigned by scheduler on enqueue (0 initially) */
   uint64_t deadline;          /* optional absolute deadline in monotonic ms (0 = none) */
   uint64_t timeout;           /* optional absolute timeout in monotonic ms (0 = none) */
-  uint8_t priority;            /* FSScheduler_Priority_BACKGROUND/UI/INTERACTIVE */
 } FSSchedulerInstantTask;
 
 /* A task that is executed once after a specified absolute start time. */
 typedef struct FSSchedulerDeferredTask {
   void (*task)(void *context); /* function pointer */
   void *context;               /* data pointer passed to task callback */
+  uint8_t priority;            /* FSScheduler_Priority_BACKGROUND/UI/INTERACTIVE */
   uint64_t start_time;         /* earliest execution time in monotonic ms */
   uint64_t id;                      /* assigned by scheduler on enqueue (0 initially) */
   uint64_t deadline;          /* optional absolute deadline in monotonic ms (0 = none) */
   uint64_t timeout;           /* optional absolute timeout in monotonic ms (0 = none) */
-  uint8_t priority;            /* FSScheduler_Priority_BACKGROUND/UI/INTERACTIVE */
 } FSSchedulerDeferredTask;
 
 /* A task that is executed repeatedly at a fixed interval. */
 typedef struct FSSchedulerRepeatingTask {
   void (*task)(void *context); /* function pointer */
   void *context;               /* data pointer passed to task callback */
+  uint8_t priority; /* FSScheduler_Priority_BACKGROUND/UI/INTERACTIVE */
   uint64_t start_time;         /* first execution time in monotonic ms (0 = now) */
   uint64_t execute_cycle;      /* repeat interval in ms */
+  FSSchedulerTaskRepeatMode repeat_mode;
   uint64_t id;                      /* assigned by scheduler on enqueue (0 initially) */
   uint64_t deadline;          /* optional absolute deadline in monotonic ms (0 = none) */
   uint64_t timeout;           /* optional absolute timeout in monotonic ms (0 = none) */
-  FSSchedulerTaskRepeatMode repeat_mode;
-  uint8_t priority; /* FSScheduler_Priority_BACKGROUND/UI/INTERACTIVE */
 } FSSchedulerRepeatingTask;
 
 typedef enum FSSchedulerTaskKind {

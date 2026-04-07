@@ -92,8 +92,9 @@ int main(void) {
   Feather_add_deferred_task(
       &feather,
       (FSSchedulerDeferredTask){.task = run_delayed,
-                                .start_time = now_ms + 100,
-                                .priority = FSScheduler_Priority_BACKGROUND});
+                                .context = NULL,
+                                .priority = FSScheduler_Priority_BACKGROUND,
+                                .start_time = now_ms + 100});
   Feather_add_instant_task(
       &feather, (FSSchedulerInstantTask){
                     .task = run_immediate,
@@ -153,9 +154,9 @@ int main(void) {
       &feather,
       (FSSchedulerRepeatingTask){.task = run_repeat_fixed_rate,
                                   .context = &fixed_rate_count,
+                                  .priority = FSScheduler_Priority_UI,
                                   .start_time = fake_now_ms,
                                   .execute_cycle = 100,
-                                  .priority = FSScheduler_Priority_UI,
                                   .repeat_mode = FSSchedulerTaskRepeat_FIXEDRATE});
   success = expect_true(Feather_step(&feather),
                         "fixed-rate: first execution runs at scheduled time") &&
@@ -198,9 +199,9 @@ int main(void) {
       &feather,
       (FSSchedulerRepeatingTask){.task = run_repeat_fixed_delay,
                                   .context = &fixed_delay_count,
+                                  .priority = FSScheduler_Priority_UI,
                                   .start_time = fake_now_ms,
                                   .execute_cycle = 100,
-                                  .priority = FSScheduler_Priority_UI,
                                   .repeat_mode = FSSchedulerTaskRepeat_FIXEDDELAY});
   success =
       expect_true(Feather_step(&feather),
@@ -232,8 +233,9 @@ int main(void) {
   Feather_add_deferred_task(
       &feather,
       (FSSchedulerDeferredTask){.task = run_delayed,
+                                .priority = FSScheduler_Priority_UI,
                                 .start_time = fake_now_ms + 250,
-                                .priority = FSScheduler_Priority_UI});
+                                });
   {
     uint64_t sleep_ms = 0;
     success = expect_true(

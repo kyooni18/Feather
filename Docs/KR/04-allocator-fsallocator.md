@@ -6,7 +6,7 @@
 
 주요 파일:
 - `System/FeatherRuntime/FSAllocator.h`
-- `System/FeatherRuntime/FSAllocator.c`
+- `System/FeatherRuntime/FSAllocator.cpp`
 
 ## 인터페이스
 
