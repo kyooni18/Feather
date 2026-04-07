@@ -6,7 +6,7 @@
 
 Main files:
 - `System/FeatherRuntime/FSAllocator.h`
-- `System/FeatherRuntime/FSAllocator.c`
+- `System/FeatherRuntime/FSAllocator.cpp`
 
 ## Public Type
 

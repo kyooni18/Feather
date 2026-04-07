@@ -6,7 +6,7 @@
 
 주요 파일:
 - `System/Feather.h`
-- `System/Feather.c`
+- `System/Feather.cpp`
 
 ## 핵심 타입
 

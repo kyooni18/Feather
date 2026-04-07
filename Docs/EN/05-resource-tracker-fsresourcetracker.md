@@ -6,7 +6,7 @@
 
 Main files:
 - `System/FeatherRuntime/FSResourceTracker.h`
-- `System/FeatherRuntime/FSResourceTracker.c`
+- `System/FeatherRuntime/FSResourceTracker.cpp`
 
 ## Public Types
 

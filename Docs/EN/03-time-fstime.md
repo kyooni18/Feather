@@ -6,10 +6,10 @@
 
 Main files:
 - `System/FeatherRuntime/FSTime.h`
-- `System/FeatherRuntime/FSTime.c`
-- `System/FeatherRuntime/FSTime_posix.c`
-- `System/FeatherRuntime/FSTime_windows.c`
-- `System/FeatherRuntime/FSTime_arduino.c`
+- `System/FeatherRuntime/FSTime.cpp`
+- `System/FeatherRuntime/FSTime_posix.cpp`
+- `System/FeatherRuntime/FSTime_windows.cpp`
+- `System/FeatherRuntime/FSTime_arduino.cpp`
 
 ## Public Type
 

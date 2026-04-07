@@ -6,7 +6,7 @@
 
 Main files:
 - `System/Feather.h`
-- `System/Feather.c`
+- `System/Feather.cpp`
 
 ## Public Types and Aliases
 

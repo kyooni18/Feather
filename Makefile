@@ -41,19 +41,23 @@ build: $(build_dir)/CMakeCache.txt
 shared: $(build_shared_dir)/CMakeCache.txt
 	cmake --build $(build_shared_dir)
 
-demo: $(build_dir)/CMakeCache.txt
+demo:
+	cmake -S . -B $(build_dir) -DFEATHER_BUILD_DEMO=ON $(feather_cmake_args)
 	cmake --build $(build_dir) --target feather_demo
 
-fast-demo: $(build_dir)/CMakeCache.txt
+fast-demo:
+	cmake -S . -B $(build_dir) -DFEATHER_BUILD_FAST_DEMO=ON $(feather_cmake_args)
 	cmake --build $(build_dir) --target feather_fast_demo
 
 test-cli: $(build_dir)/CMakeCache.txt
 	cmake --build $(build_dir) --target feather_test_cli
 
-memory-test: $(build_dir)/CMakeCache.txt
+memory-test:
+	cmake -S . -B $(build_dir) -DFEATHER_BUILD_MEMORY_TEST=ON $(feather_cmake_args)
 	cmake --build $(build_dir) --target feather_memory_test
 
-system-score-test: $(build_dir)/CMakeCache.txt
+system-score-test:
+	cmake -S . -B $(build_dir) -DFEATHER_BUILD_SYSTEM_SCORE_TEST=ON $(feather_cmake_args)
 	cmake --build $(build_dir) --target feather_system_score_test
 
 tracking-test: $(build_dir)/CMakeCache.txt
@@ -138,7 +142,7 @@ distclean: clean
 	cmake -E rm -rf logs
 
 full-system-benchmark:
-	cmake -S . -B build/static
+	cmake -S . -B build/static -DFEATHER_BUILD_FULL_SYSTEM_BENCHMARK=ON
 	cmake --build build/static --target feather_full_system_benchmark
 
 run-full-system-benchmark: full-system-benchmark

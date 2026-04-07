@@ -189,14 +189,14 @@ static bool run_repeat(uint64_t interval_ms, uint64_t iterations,
   ok = expect_true(
            Feather_add_repeating_task(
                &feather,
-               (FSSchedulerRepeatingTask){.task = count_task,
-                                          .context = &g_counter,
-                                          .priority = FSScheduler_Priority_UI,
-                                          .execute_cycle = interval_ms,
-                                          .repeat_mode = mode,
-                                          .start_time = g_fake_now_ms}),
-           "repeat: add periodic task") &&
-       ok;
+                (FSSchedulerRepeatingTask){.task = count_task,
+                                           .context = &g_counter,
+                                           .priority = FSScheduler_Priority_UI,
+                                           .start_time = g_fake_now_ms,
+                                           .execute_cycle = interval_ms,
+                                           .repeat_mode = mode}),
+            "repeat: add periodic task") &&
+        ok;
 
   for (i = 0; i < iterations; i++) {
     ok = expect_true(Feather_step(&feather),

@@ -6,32 +6,32 @@
 #include "FSTime.h"
 
 const FSSchedulerInstantTask FSSchedulerInstantTask_init = {
-    .id = 0,
     .task = NULL,
     .context = NULL,
+    .priority = 0,
+    .id = 0,
     .deadline = 0,
-    .timeout = 0,
-    .priority = 0};
+    .timeout = 0};
 
 const FSSchedulerDeferredTask FSSchedulerDeferredTask_init = {
-    .id = 0,
     .task = NULL,
     .context = NULL,
+    .priority = 0,
     .start_time = 0,
+    .id = 0,
     .deadline = 0,
-    .timeout = 0,
-    .priority = 0};
+    .timeout = 0};
 
 const FSSchedulerRepeatingTask FSSchedulerRepeatingTask_init = {
-    .id = 0,
     .task = NULL,
     .context = NULL,
+    .priority = 0,
     .start_time = 0,
     .execute_cycle = 0,
-    .deadline = 0,
-    .timeout = 0,
     .repeat_mode = FSSchedulerTaskRepeat_FIXEDDELAY,
-    .priority = 0};
+    .id = 0,
+    .deadline = 0,
+    .timeout = 0};
 
 const FSSchedulerTaskHandler FSSchedulerTaskHandler_init = {.task_id = 0,
                                                           .user_tag = 0};

@@ -6,7 +6,7 @@
 
 Main files:
 - `System/FeatherRuntime/FSScheduler.h`
-- `System/FeatherRuntime/FSScheduler.c`
+- `System/FeatherRuntime/FSScheduler.cpp`
 
 ## Public Constants and Macros
 
