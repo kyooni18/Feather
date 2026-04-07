@@ -68,7 +68,7 @@ else()
 endif()
 
 set_target_properties(Feather PROPERTIES
-    CXX_STANDARD 23
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
     POSITION_INDEPENDENT_CODE ON
@@ -107,7 +107,7 @@ if(FEATHER_BUILD_RESOURCE_TRACKING)
     endif()
 
     set_target_properties(FeatherResourceTracking PROPERTIES
-        CXX_STANDARD 23
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED YES
         CXX_EXTENSIONS NO
         POSITION_INDEPENDENT_CODE ON
@@ -136,7 +136,7 @@ if(FEATHER_BUILD_CPP_API)
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     )
     set_target_properties(FeatherCpp PROPERTIES
-        CXX_STANDARD 23
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED YES
         CXX_EXTENSIONS NO
         POSITION_INDEPENDENT_CODE ON
@@ -150,7 +150,7 @@ function(feather_add_tool target_name source_file output_name)
     target_link_libraries(${target_name} PRIVATE Feather::Feather)
     set_target_properties(${target_name} PROPERTIES
         OUTPUT_NAME ${output_name}
-        CXX_STANDARD 23
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED YES
         CXX_EXTENSIONS NO
     )
@@ -177,7 +177,7 @@ if(FEATHER_BUILD_MEMORY_TEST AND FEATHER_BUILD_RESOURCE_TRACKING)
     target_link_libraries(feather_memory_test PRIVATE Feather::FeatherResourceTracking)
     set_target_properties(feather_memory_test PROPERTIES
         OUTPUT_NAME FeatherMemoryTest
-        CXX_STANDARD 23
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED YES
         CXX_EXTENSIONS NO
     )
@@ -201,7 +201,7 @@ if(FEATHER_BUILD_SYSTEM_SCORE_TEST AND EXISTS "${FEATHER_SYSTEM_SCORE_TEST_SOURC
     endif()
     set_target_properties(feather_system_score_test PROPERTIES
         OUTPUT_NAME FeatherSystemScoreTest
-        CXX_STANDARD 23
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED YES
         CXX_EXTENSIONS NO
     )
@@ -218,7 +218,7 @@ if(FEATHER_BUILD_RESOURCE_TRACKING AND FEATHER_BUILD_RESOURCE_TRACKING_TEST)
     )
     set_target_properties(feather_resource_tracking_test PROPERTIES
         OUTPUT_NAME FeatherResourceTrackingTest
-        CXX_STANDARD 23
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED YES
         CXX_EXTENSIONS NO
     )
@@ -231,7 +231,7 @@ if(FEATHER_BUILD_CPP_API AND FEATHER_BUILD_CPP_TEST)
     target_link_libraries(feather_cpp_scheduler_test PRIVATE Feather::FeatherCpp)
     set_target_properties(feather_cpp_scheduler_test PROPERTIES
         OUTPUT_NAME FeatherCppSchedulerTest
-        CXX_STANDARD 23
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED YES
         CXX_EXTENSIONS NO
     )
@@ -273,7 +273,7 @@ if(FEATHER_BUILD_RESOURCE_TRACKING AND FEATHER_BUILD_FULL_SYSTEM_BENCHMARK)
 
     set_target_properties(feather_full_system_benchmark PROPERTIES
         OUTPUT_NAME FeatherFullSystemBenchmark
-        CXX_STANDARD 23
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED YES
         CXX_EXTENSIONS NO
     )

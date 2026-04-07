@@ -7,8 +7,54 @@
 #include <functional>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 
 namespace feather {
+
+#if __cplusplus >= 202302L
+template <typename Sig>
+using MoveOnlyFunction = std::move_only_function<Sig>;
+#else
+template <typename Sig>
+class MoveOnlyFunction;
+
+template <typename R, typename... Args>
+class MoveOnlyFunction<R(Args...)> {
+public:
+  MoveOnlyFunction() = default;
+
+  template <typename F,
+            typename = std::enable_if_t<
+                !std::is_same_v<std::decay_t<F>, MoveOnlyFunction> &&
+                std::is_invocable_r_v<R, std::decay_t<F>, Args...>>>
+  MoveOnlyFunction(F &&f)
+      : impl_(std::make_unique<Impl<std::decay_t<F>>>(std::forward<F>(f))) {}
+
+  MoveOnlyFunction(MoveOnlyFunction &&) = default;
+  MoveOnlyFunction &operator=(MoveOnlyFunction &&) = default;
+  MoveOnlyFunction(const MoveOnlyFunction &) = delete;
+  MoveOnlyFunction &operator=(const MoveOnlyFunction &) = delete;
+
+  explicit operator bool() const noexcept { return impl_ != nullptr; }
+
+  R operator()(Args... args) { return (*impl_)(std::forward<Args>(args)...); }
+
+private:
+  struct ImplBase {
+    virtual R operator()(Args... args) = 0;
+    virtual ~ImplBase() = default;
+  };
+  template <typename F>
+  struct Impl final : ImplBase {
+    explicit Impl(F &&f) : f_(std::move(f)) {}
+    R operator()(Args... args) override {
+      return f_(std::forward<Args>(args)...);
+    }
+    F f_;
+  };
+  std::unique_ptr<ImplBase> impl_;
+};
+#endif
 
 enum class Priority : std::uint8_t {
   Background = FSScheduler_Priority_BACKGROUND,
@@ -55,7 +101,7 @@ private:
 
 class Scheduler {
 public:
-  using Task = std::move_only_function<void()>;
+  using Task = MoveOnlyFunction<void()>;
 
   Scheduler();
   ~Scheduler();
