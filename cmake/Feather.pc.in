@@ -1,0 +1,10 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: Feather
+Description: Priority-aware cooperative task scheduler in C
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -lFeather
+Cflags: -I${includedir}

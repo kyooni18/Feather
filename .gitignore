@@ -1,0 +1,10 @@
+/Feather
+/Executable/
+
+/build/
+/build-*/
+/cmake-build-*/
+/logs/
+
+.env
+.DS_Store
