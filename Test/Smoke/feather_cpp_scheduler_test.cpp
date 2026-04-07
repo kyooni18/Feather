@@ -51,8 +51,7 @@ int main() {
   expect_true(scheduler.cancel(cancelled_handle), "cancel scheduled task");
   expect_true(!scheduler.step(), "step returns false after cancelled task");
   expect_true(counter == 7, "cancelled task does not execute");
-  const FeatherComponentMemorySnapshot memory_snapshot =
-      scheduler.component_memory_snapshot();
+  const auto memory_snapshot = scheduler.component_memory_snapshot();
   expect_true(memory_snapshot.total_bytes > 0,
               "component memory snapshot reports tracked allocator bytes");
 
