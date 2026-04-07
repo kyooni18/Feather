@@ -44,6 +44,12 @@ int main() {
   expect_true(!scheduler.step(), "step returns false after cancelled task");
   expect_true(counter == 7, "cancelled task does not execute");
 
-  std::printf("[PASS] Feather C++ scheduler tests\n");
-  return (g_failures == 0) ? 0 : 1;
+  if (g_failures == 0) {
+    std::printf("[PASS] Feather C++ scheduler tests\n");
+    return 0;
+  }
+
+  std::fprintf(stderr, "[FAIL] Feather C++ scheduler tests (%d failures)\n",
+               g_failures);
+  return 1;
 }

@@ -12,7 +12,7 @@ namespace feather {
 
 enum class Priority : std::uint8_t {
   Background = FSScheduler_Priority_BACKGROUND,
-  Ui = FSScheduler_Priority_UI,
+  UI = FSScheduler_Priority_UI,
   Interactive = FSScheduler_Priority_INTERACTIVE
 };
 

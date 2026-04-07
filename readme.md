@@ -19,7 +19,7 @@ It provides priority queues, deferred (one-shot) tasks, and repeating tasks with
 ## Requirements
 
 - **CMake** ≥ 3.20
-- A **C99** compiler (for C API) and a **C++23** compiler (for C++ API)
+- A **C99** compiler (for the C API), or a **C++23** compiler (for the C++ API)
 - GNU Make (for convenience Makefile targets)
 
 ## Building
