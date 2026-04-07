@@ -1,6 +1,6 @@
 # Feather
 
-Feather is a lightweight cooperative task scheduler library written in C99.  
+Feather is a lightweight cooperative task scheduler library with both C99 and C++23 APIs.  
 It provides priority queues, deferred (one-shot) tasks, and repeating tasks with fixed-delay or fixed-rate semantics — with no dynamic threading or OS dependencies.
 
 ## Features
@@ -12,13 +12,14 @@ It provides priority queues, deferred (one-shot) tasks, and repeating tasks with
 - Pluggable time source (`FSTime` / custom `now_fn` callback)
 - Pluggable allocator (`FSAllocator`)
 - Optional `FeatherResourceTracking` extension for allocator-level memory accounting
+- C++ scheduler API (`feather::Scheduler`) with `TaskHandle`, `TaskOptions`, and move-only callables
 - Arduino-compatible export
-- C99, no external runtime dependencies
+- C99/C++23, no external runtime dependencies
 
 ## Requirements
 
 - **CMake** ≥ 3.20
-- A **C99** compiler (GCC, Clang, MSVC)
+- A **C99** compiler (for C API) and a **C++23** compiler (for C++ API)
 - GNU Make (for convenience Makefile targets)
 
 ## Building

@@ -4,7 +4,7 @@ if(APPLE AND (NOT DEFINED CMAKE_OSX_ARCHITECTURES OR CMAKE_OSX_ARCHITECTURES STR
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Architectures to build for on macOS" FORCE)
 endif()
 
-project(Feather VERSION 0.1.0 LANGUAGES C)
+project(Feather VERSION 0.1.0 LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -21,6 +21,8 @@ option(FEATHER_BUILD_RESOURCE_TRACKING
        "Build the optional Feather memory tracking library" ON)
 option(FEATHER_BUILD_RESOURCE_TRACKING_TEST
        "Build the Feather resource tracking test executable" ON)
+option(FEATHER_BUILD_CPP_API "Build the Feather C++ scheduler API library" ON)
+option(FEATHER_BUILD_CPP_TEST "Build the Feather C++ scheduler smoke test" ON)
 option(FEATHER_INSTALL_PKGCONFIG "Install pkg-config metadata for Feather" ON)
 
 file(GLOB_RECURSE FEATHER_SOURCES CONFIGURE_DEPENDS
@@ -35,6 +37,9 @@ list(REMOVE_ITEM FEATHER_SOURCES "${FEATHER_RESOURCE_TRACKING_SOURCE}")
 
 file(GLOB_RECURSE FEATHER_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/System/*.h"
+)
+file(GLOB_RECURSE FEATHER_CPP_HEADERS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/System/*.hpp"
 )
 
 if(FEATHER_BUILD_SHARED)
@@ -112,6 +117,27 @@ if(FEATHER_BUILD_RESOURCE_TRACKING)
             INSTALL_NAME_DIR "${CMAKE_INSTALL_FULL_LIBDIR}"
         )
     endif()
+endif()
+
+if(FEATHER_BUILD_CPP_API)
+    add_library(FeatherCpp STATIC
+        System/FeatherCpp.cpp
+    )
+    add_library(Feather::FeatherCpp ALIAS FeatherCpp)
+    target_link_libraries(FeatherCpp PUBLIC Feather::Feather)
+    target_include_directories(FeatherCpp
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/System>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    )
+    set_target_properties(FeatherCpp PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED YES
+        CXX_EXTENSIONS NO
+        POSITION_INDEPENDENT_CODE ON
+        VERSION ${PROJECT_VERSION}
+        SOVERSION ${PROJECT_VERSION_MAJOR}
+    )
 endif()
 
 function(feather_add_tool target_name source_file output_name)
@@ -193,6 +219,19 @@ if(FEATHER_BUILD_RESOURCE_TRACKING AND FEATHER_BUILD_RESOURCE_TRACKING_TEST)
     )
 endif()
 
+if(FEATHER_BUILD_CPP_API AND FEATHER_BUILD_CPP_TEST)
+    add_executable(feather_cpp_scheduler_test
+        Test/Smoke/feather_cpp_scheduler_test.cpp
+    )
+    target_link_libraries(feather_cpp_scheduler_test PRIVATE Feather::FeatherCpp)
+    set_target_properties(feather_cpp_scheduler_test PROPERTIES
+        OUTPUT_NAME FeatherCppSchedulerTest
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED YES
+        CXX_EXTENSIONS NO
+    )
+endif()
+
 install(TARGETS Feather
     EXPORT FeatherTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -202,6 +241,15 @@ install(TARGETS Feather
 
 if(FEATHER_BUILD_RESOURCE_TRACKING)
     install(TARGETS FeatherResourceTracking
+        EXPORT FeatherTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
+
+if(FEATHER_BUILD_CPP_API)
+    install(TARGETS FeatherCpp
         EXPORT FeatherTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -234,6 +282,17 @@ foreach(FEATHER_HEADER IN LISTS FEATHER_HEADERS)
     get_filename_component(FEATHER_HEADER_DIRECTORY "${FEATHER_HEADER_RELATIVE}" DIRECTORY)
     install(FILES "${FEATHER_HEADER}"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${FEATHER_HEADER_DIRECTORY}"
+    )
+endforeach()
+
+foreach(FEATHER_CPP_HEADER IN LISTS FEATHER_CPP_HEADERS)
+    file(RELATIVE_PATH FEATHER_CPP_HEADER_RELATIVE
+        "${CMAKE_CURRENT_SOURCE_DIR}/System"
+        "${FEATHER_CPP_HEADER}"
+    )
+    get_filename_component(FEATHER_CPP_HEADER_DIRECTORY "${FEATHER_CPP_HEADER_RELATIVE}" DIRECTORY)
+    install(FILES "${FEATHER_CPP_HEADER}"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${FEATHER_CPP_HEADER_DIRECTORY}"
     )
 endforeach()
 
