@@ -22,6 +22,12 @@ It provides priority queues, deferred (one-shot) tasks, and repeating tasks with
 - A **C++23** compiler (GCC, Clang, MSVC)
 - GNU Make (for convenience Makefile targets)
 
+## Migration Notes
+
+- Source files were migrated from `.c` to `.cpp`.
+- Public task option structs in `FSScheduler.h` were reordered to satisfy C++ designated-initializer ordering rules.
+- If you use designated initializers for `FSSchedulerInstantTask`, `FSSchedulerDeferredTask`, or `FSSchedulerRepeatingTask`, update field order to match struct declaration order.
+
 ## Building
 
 ```sh

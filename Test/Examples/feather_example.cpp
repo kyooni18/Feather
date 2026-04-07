@@ -93,8 +93,7 @@ int main(void) {
       &feather,
       (FSSchedulerDeferredTask){.task = run_delayed,
                                 .priority = FSScheduler_Priority_BACKGROUND,
-                                .start_time = now_ms + 100,
-                                });
+                                .start_time = now_ms + 100});
   Feather_add_instant_task(
       &feather, (FSSchedulerInstantTask){
                     .task = run_immediate,

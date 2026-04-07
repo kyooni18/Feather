@@ -151,7 +151,7 @@ cmake --build build/minimal
 ```cmake
 find_package(Feather REQUIRED)
 
-add_executable(my_app main.cpppp)
+add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE Feather::Feather)
 ```
 
