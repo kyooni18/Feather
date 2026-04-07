@@ -129,7 +129,7 @@ LDFLAGS += $(shell pkg-config --libs   Feather)
 
 ## Quick Usage
 
-```cpp
+```c
 #include "Feather.h"
 
 static void my_task(void *ctx) { /* ... */ }
