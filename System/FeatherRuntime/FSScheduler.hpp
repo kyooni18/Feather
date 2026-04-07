@@ -1,9 +1,9 @@
 #ifndef FS_SCHEDULER_H
 #define FS_SCHEDULER_H
 
-#include "../FeatherExport.h"
-#include "FSAllocator.h"
-#include "FSTime.h"
+#include "../FeatherExport.hpp"
+#include "FSAllocator.hpp"
+#include "FSTime.hpp"
 
 #include <stdbool.h>
 #include <stdint.h>

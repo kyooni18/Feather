@@ -5,7 +5,7 @@
 `Feather` is the top-level entry point that wraps one `FSScheduler` instance and exposes a small user-facing API.
 
 Main files:
-- `System/Feather.h`
+- `System/Feather.hpp`
 - `System/Feather.cpp`
 
 ## Public Types and Aliases
@@ -60,7 +60,7 @@ Returns assigned task ID on success, `0` on failure.
 ## Usage Example
 
 ```c
-#include "Feather.h"
+#include "Feather.hpp"
 #include <stdio.h>
 
 static void print_task(void *ctx) {

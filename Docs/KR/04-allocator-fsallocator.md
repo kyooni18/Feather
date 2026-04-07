@@ -5,7 +5,7 @@
 `FSAllocator`는 런타임 내부 메모리 할당을 사용자 정의 가능하게 만드는 추상화 계층입니다.
 
 주요 파일:
-- `System/FeatherRuntime/FSAllocator.h`
+- `System/FeatherRuntime/FSAllocator.hpp`
 - `System/FeatherRuntime/FSAllocator.cpp`
 
 ## 인터페이스

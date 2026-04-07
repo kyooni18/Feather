@@ -25,7 +25,7 @@
 #include <mach/task_info.h>
 #endif
 
-#include "Feather.h"
+#include "Feather.hpp"
 
 #define CHECKSUM_MOD 1000000007LL
 #define CHECKSUM_MOD2 998244353LL

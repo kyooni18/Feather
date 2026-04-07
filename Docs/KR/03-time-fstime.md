@@ -5,7 +5,7 @@
 `FSTime`은 플랫폼별 시간 조회/슬립 구현을 공통 인터페이스로 추상화합니다. 스케줄러는 이 계층 덕분에 플랫폼 독립적으로 동작합니다.
 
 주요 파일:
-- `System/FeatherRuntime/FSTime.h`
+- `System/FeatherRuntime/FSTime.hpp`
 - `System/FeatherRuntime/FSTime.cpp`
 - `System/FeatherRuntime/FSTime_posix.cpp`
 - `System/FeatherRuntime/FSTime_windows.cpp`

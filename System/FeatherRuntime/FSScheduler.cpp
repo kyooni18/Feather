@@ -1,9 +1,9 @@
-#include "FSScheduler.h"
+#include "FSScheduler.hpp"
 
 #include <stdlib.h>
 #include <string.h>
 
-#include "FSTime.h"
+#include "FSTime.hpp"
 
 const FSSchedulerInstantTask FSSchedulerInstantTask_init = {
     .task = NULL,

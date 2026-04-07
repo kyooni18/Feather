@@ -71,6 +71,21 @@ bool Scheduler::cancel(TaskHandle handle) {
   return true;
 }
 
+bool Scheduler::set_time_source(std::uint64_t (*now_fn)(void *context),
+                                void *context) {
+  if (!initialized_) {
+    return false;
+  }
+  return Feather_set_time_source(&feather_, now_fn, context);
+}
+
+bool Scheduler::set_time_provider(const FSTime *provider) {
+  if (!initialized_) {
+    return false;
+  }
+  return Feather_set_time_provider(&feather_, provider);
+}
+
 bool Scheduler::pause(TaskHandle handle) {
   if (!initialized_ || !handle.valid()) {
     return false;
@@ -114,6 +129,20 @@ TaskState Scheduler::state(TaskHandle handle) const {
     return TaskState::NotFound;
   }
   return to_state(Feather_task_status(&feather_, handle.id()));
+}
+
+FeatherComponentMemorySnapshot Scheduler::component_memory_snapshot() const {
+  if (!initialized_) {
+    return FeatherComponentMemorySnapshot{};
+  }
+  return Feather_component_memory_snapshot(&feather_);
+}
+
+FSSchedulerStateSnapshot Scheduler::state_snapshot() const {
+  if (!initialized_) {
+    return FSSchedulerStateSnapshot{};
+  }
+  return Feather_state_snapshot(&feather_);
 }
 
 bool Scheduler::step() {

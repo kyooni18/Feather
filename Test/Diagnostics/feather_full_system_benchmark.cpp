@@ -17,8 +17,8 @@
 #include <mach/task_info.h>
 #endif
 
-#include "Feather.h"
-#include "FeatherRuntime/FSResourceTracker.h"
+#include "Feather.hpp"
+#include "FeatherRuntime/FSResourceTracker.hpp"
 
 #define RUN_SECONDS 30.0
 #define SNAPSHOT_INTERVAL_SECONDS 1.0

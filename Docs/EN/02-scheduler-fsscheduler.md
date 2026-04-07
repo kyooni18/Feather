@@ -5,7 +5,7 @@
 `FSScheduler` is the core cooperative scheduler implementation.
 
 Main files:
-- `System/FeatherRuntime/FSScheduler.h`
+- `System/FeatherRuntime/FSScheduler.hpp`
 - `System/FeatherRuntime/FSScheduler.cpp`
 
 ## Public Constants and Macros
@@ -101,7 +101,7 @@ These provide zero/default initializers for task structs.
 ## Usage Example
 
 ```c
-#include "FeatherRuntime/FSScheduler.h"
+#include "FeatherRuntime/FSScheduler.hpp"
 
 static void run_count(void *ctx) {
     int *count = (int *)ctx;

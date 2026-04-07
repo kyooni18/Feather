@@ -1,7 +1,7 @@
 #ifndef FS_TIME_H
 #define FS_TIME_H
 
-#include "FeatherExport.h"
+#include "FeatherExport.hpp"
 
 #include <stdbool.h>
 #include <stdint.h>

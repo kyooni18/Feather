@@ -1,4 +1,4 @@
-#include "Feather.h"
+#include "Feather.hpp"
 
 #include <stddef.h>
 #include <string.h>

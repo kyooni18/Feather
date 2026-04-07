@@ -5,7 +5,7 @@
 `FSResourceTracker` is an optional extension that wraps allocation calls and exposes memory/leak diagnostics.
 
 Main files:
-- `System/FeatherRuntime/FSResourceTracker.h`
+- `System/FeatherRuntime/FSResourceTracker.hpp`
 - `System/FeatherRuntime/FSResourceTracker.cpp`
 
 ## Public Types
@@ -39,8 +39,8 @@ Main files:
 ## Usage Example
 
 ```c
-#include "Feather.h"
-#include "FeatherRuntime/FSResourceTracker.h"
+#include "Feather.hpp"
+#include "FeatherRuntime/FSResourceTracker.hpp"
 
 static void noop_task(void *ctx) {
     (void)ctx;

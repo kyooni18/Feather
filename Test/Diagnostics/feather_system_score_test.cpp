@@ -19,12 +19,12 @@
 #include <mach/task_info.h>
 #endif
 
-#include "Feather.h"
-#include "FeatherRuntime/FSAllocator.h"
-#include "FeatherRuntime/FSTime.h"
+#include "Feather.hpp"
+#include "FeatherRuntime/FSAllocator.hpp"
+#include "FeatherRuntime/FSTime.hpp"
 
 #if defined(FEATHER_SYSTEM_SCORE_HAS_RESOURCE_TRACKING)
-#include "FeatherRuntime/FSResourceTracker.h"
+#include "FeatherRuntime/FSResourceTracker.hpp"
 #endif
 
 #define MAX_EVENT_LOG 64

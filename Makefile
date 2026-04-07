@@ -13,7 +13,7 @@ FEATHER_ARDUINO_SENTENCE ?= Lightweight cooperative scheduler for embedded C and
 FEATHER_ARDUINO_PARAGRAPH ?= Feather provides priority queues, delayed execution, and repeating tasks.
 FEATHER_ARDUINO_CATEGORY ?= Timing
 FEATHER_ARDUINO_ARCHITECTURES ?= *
-FEATHER_ARDUINO_INCLUDES ?= Feather.h
+FEATHER_ARDUINO_INCLUDES ?= Feather.hpp
 legacy_build_dirs := build-universal build-shared build-shared-universal build-shared-install
 
 UNAME_S := $(shell uname -s)

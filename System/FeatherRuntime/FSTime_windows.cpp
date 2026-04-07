@@ -12,7 +12,7 @@
 #endif
 #include <windows.h>
 
-#include "FSTime.h"
+#include "FSTime.hpp"
 
 uint64_t FSTime_now_monotonic(void) {
   LARGE_INTEGER frequency, counter;

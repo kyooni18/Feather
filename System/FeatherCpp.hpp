@@ -1,7 +1,7 @@
 #ifndef FEATHER_CPP_HPP
 #define FEATHER_CPP_HPP
 
-#include "Feather.h"
+#include "Feather.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -120,12 +120,16 @@ public:
 
   TaskHandle schedule(Task task, const TaskOptions &options = {});
   bool cancel(TaskHandle handle);
+  bool set_time_source(std::uint64_t (*now_fn)(void *context), void *context);
+  bool set_time_provider(const FSTime *provider);
   bool pause(TaskHandle handle);
   bool resume(TaskHandle handle);
   bool reschedule(TaskHandle handle, std::uint64_t start_time_ms);
   bool set_deadline(TaskHandle handle, std::uint64_t deadline_ms);
   bool set_timeout(TaskHandle handle, std::uint64_t timeout_ms);
   [[nodiscard]] TaskState state(TaskHandle handle) const;
+  [[nodiscard]] FeatherComponentMemorySnapshot component_memory_snapshot() const;
+  [[nodiscard]] FSSchedulerStateSnapshot state_snapshot() const;
 
   bool step();
   [[nodiscard]] bool has_pending_tasks() const;

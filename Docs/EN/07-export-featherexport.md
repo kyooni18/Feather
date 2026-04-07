@@ -2,10 +2,10 @@
 
 ## Purpose
 
-`FeatherExport.h` defines visibility and language-linkage macros used by all public headers.
+`FeatherExport.hpp` defines visibility and language-linkage macros used by all public headers.
 
 Main file:
-- `System/FeatherExport.h`
+- `System/FeatherExport.hpp`
 
 ## Public Macros
 
