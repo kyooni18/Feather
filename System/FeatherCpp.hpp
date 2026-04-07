@@ -37,7 +37,12 @@ public:
 
   explicit operator bool() const noexcept { return impl_ != nullptr; }
 
-  R operator()(Args... args) { return (*impl_)(std::forward<Args>(args)...); }
+  R operator()(Args... args) {
+    if (!impl_) {
+      throw std::bad_function_call{};
+    }
+    return (*impl_)(std::forward<Args>(args)...);
+  }
 
 private:
   struct ImplBase {
