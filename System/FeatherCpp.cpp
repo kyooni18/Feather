@@ -1,4 +1,4 @@
-#include "FeatherCpp.hpp"
+#include "Feather.hpp"
 
 #include <utility>
 
@@ -152,7 +152,7 @@ bool Scheduler::set_time_source(std::uint64_t (*now_fn)(void *context),
   return Feather_set_time_source(&feather_, now_fn, context);
 }
 
-bool Scheduler::set_time_provider(const FSTime *provider) {
+bool Scheduler::set_time_provider(const ::FSTime *provider) {
   if (!initialized_) {
     return false;
   }
