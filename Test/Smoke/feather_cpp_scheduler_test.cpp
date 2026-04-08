@@ -31,19 +31,18 @@ int main() {
               "empty scheduler snapshot reports no pending tasks");
   expect_true(feather::FSTime::default_provider() != nullptr,
               "time namespace exposes default provider");
-  expect_true(feather::FSAllocator::resolve(nullptr) == &FSAllocator_system,
-              "allocator namespace resolves to system allocator");
+  expect_true(feather::FSAllocator::API::resolve(nullptr) == &FSAllocator_system,
+              "allocator class API resolves to system allocator");
   feather::FSResourceTracker::Config tracker_config{};
   expect_true(tracker_config.base_allocator == nullptr &&
                   tracker_config.now_fn == nullptr &&
                   tracker_config.now_context == nullptr,
               "resource_tracker namespace exposes usable config type");
-  feather::FSScheduler::RawScheduler raw_scheduler{};
-  feather::FSScheduler::init(&raw_scheduler);
-  const std::uint64_t raw_now_ms = feather::FSScheduler::now_ms();
+  feather::FSScheduler::Instance raw_scheduler;
+  const std::uint64_t raw_now_ms = feather::FSScheduler::API::now_ms();
   (void)raw_now_ms;
-  expect_true(true, "scheduler namespace exposes now_ms");
-  feather::FSScheduler::deinit(&raw_scheduler);
+  expect_true(raw_scheduler.state_snapshot().total_pending == 0,
+              "scheduler class API exposes snapshot");
 
   int counter = 0;
   auto captured_value = std::make_unique<int>(7);
