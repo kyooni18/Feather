@@ -89,6 +89,36 @@ struct TaskOptions {
   std::uint64_t timeout_ms = 0;
 };
 
+/* Lambda-based C++ task types — mirrors the C FSScheduler*Task structs but
+ * accepts any callable (lambda, functor, etc.) instead of a raw function
+ * pointer + context.  Pass these directly to Scheduler::schedule() without
+ * declaring a separate variable first. */
+
+struct InstantTask {
+  MoveOnlyFunction<void()> callable;
+  Priority priority = Priority::Background;
+  std::uint64_t deadline_ms = 0;
+  std::uint64_t timeout_ms = 0;
+};
+
+struct DeferredTask {
+  MoveOnlyFunction<void()> callable;
+  Priority priority = Priority::Background;
+  std::uint64_t start_time_ms = 0;
+  std::uint64_t deadline_ms = 0;
+  std::uint64_t timeout_ms = 0;
+};
+
+struct RepeatingTask {
+  MoveOnlyFunction<void()> callable;
+  Priority priority = Priority::Background;
+  std::uint64_t start_time_ms = 0;
+  std::uint64_t repeat_interval_ms = 0;
+  RepeatMode repeat_mode = RepeatMode::FixedDelay;
+  std::uint64_t deadline_ms = 0;
+  std::uint64_t timeout_ms = 0;
+};
+
 class TaskHandle {
 public:
   TaskHandle() = default;
@@ -119,6 +149,9 @@ public:
   [[nodiscard]] bool initialized() const { return initialized_; }
 
   TaskHandle schedule(Task task, const TaskOptions &options = {});
+  TaskHandle schedule(InstantTask task);
+  TaskHandle schedule(DeferredTask task);
+  TaskHandle schedule(RepeatingTask task);
   bool cancel(TaskHandle handle);
   bool set_time_source(std::uint64_t (*now_fn)(void *context), void *context);
   bool set_time_provider(const FSTime *provider);

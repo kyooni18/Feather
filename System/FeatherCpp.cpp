@@ -58,6 +58,79 @@ TaskHandle Scheduler::schedule(Task task, const TaskOptions &options) {
   return TaskHandle(task_id);
 }
 
+TaskHandle Scheduler::schedule(InstantTask task) {
+  if (!initialized_ || !task.callable) {
+    return {};
+  }
+
+  auto internal_task = std::make_unique<InternalTask>(std::move(task.callable));
+
+  FSSchedulerInstantTask c_task = FSSchedulerInstantTask_init;
+  c_task.task = &Scheduler::execute_task;
+  c_task.context = internal_task.get();
+  c_task.priority = to_priority(task.priority);
+  c_task.deadline = task.deadline_ms;
+  c_task.timeout = task.timeout_ms;
+
+  const std::uint64_t task_id = Feather_add_instant_task(&feather_, c_task);
+  if (task_id == 0) {
+    return {};
+  }
+
+  tasks_[task_id] = std::move(internal_task);
+  return TaskHandle(task_id);
+}
+
+TaskHandle Scheduler::schedule(DeferredTask task) {
+  if (!initialized_ || !task.callable) {
+    return {};
+  }
+
+  auto internal_task = std::make_unique<InternalTask>(std::move(task.callable));
+
+  FSSchedulerDeferredTask c_task = FSSchedulerDeferredTask_init;
+  c_task.task = &Scheduler::execute_task;
+  c_task.context = internal_task.get();
+  c_task.priority = to_priority(task.priority);
+  c_task.start_time = task.start_time_ms;
+  c_task.deadline = task.deadline_ms;
+  c_task.timeout = task.timeout_ms;
+
+  const std::uint64_t task_id = Feather_add_deferred_task(&feather_, c_task);
+  if (task_id == 0) {
+    return {};
+  }
+
+  tasks_[task_id] = std::move(internal_task);
+  return TaskHandle(task_id);
+}
+
+TaskHandle Scheduler::schedule(RepeatingTask task) {
+  if (!initialized_ || !task.callable || task.repeat_interval_ms == 0) {
+    return {};
+  }
+
+  auto internal_task = std::make_unique<InternalTask>(std::move(task.callable));
+
+  FSSchedulerRepeatingTask c_task = FSSchedulerRepeatingTask_init;
+  c_task.task = &Scheduler::execute_task;
+  c_task.context = internal_task.get();
+  c_task.priority = to_priority(task.priority);
+  c_task.start_time = task.start_time_ms;
+  c_task.execute_cycle = task.repeat_interval_ms;
+  c_task.repeat_mode = to_repeat_mode(task.repeat_mode);
+  c_task.deadline = task.deadline_ms;
+  c_task.timeout = task.timeout_ms;
+
+  const std::uint64_t task_id = Feather_add_repeating_task(&feather_, c_task);
+  if (task_id == 0) {
+    return {};
+  }
+
+  tasks_[task_id] = std::move(internal_task);
+  return TaskHandle(task_id);
+}
+
 bool Scheduler::cancel(TaskHandle handle) {
   if (!initialized_ || !handle.valid()) {
     return false;
