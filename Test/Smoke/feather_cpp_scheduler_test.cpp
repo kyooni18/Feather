@@ -29,6 +29,21 @@ int main() {
   const FSSchedulerStateSnapshot snapshot = scheduler.state_snapshot();
   expect_true(snapshot.total_pending == 0,
               "empty scheduler snapshot reports no pending tasks");
+  expect_true(feather::time::default_provider() != nullptr,
+              "time namespace exposes default provider");
+  expect_true(feather::allocator::resolve(nullptr) == &FSAllocator_system,
+              "allocator namespace resolves to system allocator");
+  feather::resource_tracker::Config tracker_config{};
+  expect_true(tracker_config.base_allocator == nullptr &&
+                  tracker_config.now_fn == nullptr &&
+                  tracker_config.now_context == nullptr,
+              "resource_tracker namespace exposes usable config type");
+  feather::scheduler::RawScheduler raw_scheduler{};
+  feather::scheduler::init(&raw_scheduler);
+  const std::uint64_t raw_now_ms = feather::scheduler::now_ms();
+  (void)raw_now_ms;
+  expect_true(true, "scheduler namespace exposes now_ms");
+  feather::scheduler::deinit(&raw_scheduler);
 
   int counter = 0;
   auto captured_value = std::make_unique<int>(7);
@@ -128,7 +143,7 @@ int main() {
   // RepeatingTask with zero interval returns invalid handle
   feather::TaskHandle zero_interval_handle =
       scheduler.schedule(feather::RepeatingTask{
-          .callable = [&repeat_count]() { repeat_count += 1; },
+          .callable = []() {},
           .repeat_interval_ms = 0,
       });
   expect_true(!zero_interval_handle.valid(),

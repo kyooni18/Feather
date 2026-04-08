@@ -2,7 +2,9 @@
 #define FEATHER_CPP_HPP
 
 #include "Feather.hpp"
+#include "FeatherRuntime/FSResourceTracker.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -113,7 +115,7 @@ struct RepeatingTask {
   MoveOnlyFunction<void()> callable;
   Priority priority = Priority::Background;
   std::uint64_t start_time_ms = 0;
-  std::uint64_t repeat_interval_ms = 0;
+  std::uint64_t repeat_interval_ms = 0; /* required (> 0) for repeating tasks */
   RepeatMode repeat_mode = RepeatMode::FixedDelay;
   std::uint64_t deadline_ms = 0;
   std::uint64_t timeout_ms = 0;
@@ -187,6 +189,89 @@ private:
   bool initialized_ = false;
   std::unordered_map<std::uint64_t, std::unique_ptr<InternalTask>> tasks_{};
 };
+
+namespace time {
+using Provider = ::FSTime;
+
+inline const Provider *default_provider() { return &::FSTime_init; }
+inline std::uint64_t now_monotonic_ms() { return ::FSTime_now_monotonic(); }
+inline std::uint64_t now_unix_ms() { return ::FSTime_now_unix(); }
+inline bool sleep_ms(std::uint64_t duration_ms) {
+  return ::FSTime_sleep_ms(duration_ms);
+}
+} // namespace time
+
+namespace allocator {
+using Allocator = ::FSAllocator;
+
+inline const Allocator *system() { return &::FSAllocator_system; }
+inline const Allocator *resolve(const Allocator *allocator) {
+  return ::FSAllocator_resolve(allocator);
+}
+inline void *allocate(const Allocator *allocator, std::size_t size) {
+  return ::FSAllocator_allocate(allocator, size);
+}
+inline void *reallocate(const Allocator *allocator, void *pointer,
+                        std::size_t size) {
+  return ::FSAllocator_reallocate(allocator, pointer, size);
+}
+inline void deallocate(const Allocator *allocator, void *pointer) {
+  ::FSAllocator_deallocate(allocator, pointer);
+}
+} // namespace allocator
+
+namespace scheduler {
+using RawScheduler = ::FSScheduler;
+using FSInstantTask = ::FSSchedulerInstantTask;
+using FSDeferredTask = ::FSSchedulerDeferredTask;
+using FSRepeatingTask = ::FSSchedulerRepeatingTask;
+using FSRepeatMode = ::FSSchedulerTaskRepeatMode;
+using FSTaskStatus = ::FSSchedulerTaskStatus;
+using FSTaskHandler = ::FSSchedulerTaskHandler;
+using FSStateSnapshot = ::FSSchedulerStateSnapshot;
+using FSComponentMemorySnapshot = ::FSSchedulerComponentMemorySnapshot;
+
+inline std::uint64_t now_ms() { return ::FSScheduler_now_ms(); }
+inline void init(RawScheduler *core) { ::FSScheduler_init(core); }
+inline void init_with_allocator(RawScheduler *core,
+                                const FSAllocator *allocator) {
+  ::FSScheduler_init_with_allocator(core, allocator);
+}
+inline void deinit(RawScheduler *core) { ::FSScheduler_deinit(core); }
+} // namespace scheduler
+
+namespace resource_tracker {
+using Tracker = ::FSResourceTracker;
+using Config = ::FSResourceTrackerConfig;
+using Record = ::FSResourceTrackerRecord;
+using Snapshot = ::FSResourceTrackerSnapshot;
+using SchedulerSnapshot = ::FSResourceTrackerSchedulerSnapshot;
+
+inline const Config *default_config() { return &::FSResourceTrackerConfig_init; }
+inline bool init(Tracker *tracker) { return ::FSResourceTracker_init(tracker); }
+inline bool init_with_config(Tracker *tracker, const Config *config) {
+  return ::FSResourceTracker_init_with_config(tracker, config);
+}
+inline void deinit(Tracker *tracker) { ::FSResourceTracker_deinit(tracker); }
+inline const FSAllocator *allocator(const Tracker *tracker) {
+  return ::FSResourceTracker_allocator(tracker);
+}
+inline Snapshot snapshot(const Tracker *tracker) {
+  return ::FSResourceTracker_snapshot(tracker);
+}
+inline std::size_t copy_active_records(const Tracker *tracker, Record *out_records,
+                                       std::size_t max_records) {
+  return ::FSResourceTracker_copy_active_records(tracker, out_records,
+                                                 max_records);
+}
+inline bool has_leaks(const Tracker *tracker) {
+  return ::FSResourceTracker_has_leaks(tracker);
+}
+inline SchedulerSnapshot scheduler_snapshot(const Tracker *tracker,
+                                            const FSScheduler *scheduler_ref) {
+  return ::FSResourceTracker_scheduler_snapshot(tracker, scheduler_ref);
+}
+} // namespace resource_tracker
 
 } // namespace feather
 
