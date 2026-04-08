@@ -1,8 +1,8 @@
 #ifndef FEATHER_H
 #define FEATHER_H
 
-#include "FeatherExport.h"
-#include "FeatherRuntime/FSScheduler.h"
+#include "FeatherExport.hpp"
+#include "FeatherRuntime/FSScheduler.hpp"
 
 FEATHER_EXTERN_C_BEGIN
 

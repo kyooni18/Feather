@@ -5,7 +5,7 @@
 `Feather` 모듈은 라이브러리 사용자를 위한 공개 진입점입니다. 내부의 `FSScheduler`를 감싸서 초기화, 작업 등록, step 실행, 시간 창 기반 처리, 작업 취소, 상태 조회, 스케줄러 상태 스냅샷 API를 단일 인터페이스로 제공합니다.
 
 주요 파일:
-- `System/Feather.h`
+- `System/Feather.hpp`
 - `System/Feather.cpp`
 
 ## 핵심 타입
@@ -99,7 +99,7 @@ FSSchedulerStateSnapshot Feather_state_snapshot(const Feather *feather);
 
 `Feather` 구조체와 API는 의도적으로 간결하게 유지됩니다. 선택적 확장 라이브러리가 이 위에 추가됩니다:
 
-- **`FeatherResourceTracking`** (`FSResourceTracker.h`) — 할당자 레벨 바이트 추적, 누수 감지, 스케줄러+메모리 통합 스냅샷 (`FSResourceTracker_scheduler_snapshot`)
+- **`FeatherResourceTracking`** (`FSResourceTracker.hpp`) — 할당자 레벨 바이트 추적, 누수 감지, 스케줄러+메모리 통합 스냅샷 (`FSResourceTracker_scheduler_snapshot`)
 
 확장 라이브러리는 `Feather::Feather`를 링크하며 `FeatherConfig.allocator`를 통해 기능을 주입합니다.
 

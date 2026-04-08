@@ -1,7 +1,7 @@
 #ifndef FS_ALLOCATOR_H
 #define FS_ALLOCATOR_H
 
-#include "../FeatherExport.h"
+#include "../FeatherExport.hpp"
 
 #include <stddef.h>
 

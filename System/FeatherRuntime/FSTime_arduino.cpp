@@ -4,7 +4,7 @@
  */
 
 #ifdef ARDUINO
-#include "FSTime.h"
+#include "FSTime.hpp"
 
 #include <Arduino.h>
 

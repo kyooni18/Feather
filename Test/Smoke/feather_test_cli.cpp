@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "Feather.h"
+#include "Feather.hpp"
 
 #define DEADLINE_ORDER_TASK_COUNT 2
 

@@ -5,7 +5,7 @@
 `FSAllocator` provides runtime-configurable allocation hooks for Feather internals and extensions.
 
 Main files:
-- `System/FeatherRuntime/FSAllocator.h`
+- `System/FeatherRuntime/FSAllocator.hpp`
 - `System/FeatherRuntime/FSAllocator.cpp`
 
 ## Public Type
@@ -37,7 +37,7 @@ Fields:
 ## Usage Example
 
 ```c
-#include "FeatherRuntime/FSAllocator.h"
+#include "FeatherRuntime/FSAllocator.hpp"
 #include <stdlib.h>
 
 typedef struct CountingCtx {

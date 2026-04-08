@@ -9,8 +9,8 @@
 #include <mach/mach.h>
 #endif
 
-#include "Feather.h"
-#include "FeatherRuntime/FSResourceTracker.h"
+#include "Feather.hpp"
+#include "FeatherRuntime/FSResourceTracker.hpp"
 
 /* ---------------------------------------------------------------------------
  * Memory / resource snapshot

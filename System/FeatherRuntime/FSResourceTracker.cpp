@@ -1,8 +1,8 @@
-#include "FSResourceTracker.h"
+#include "FSResourceTracker.hpp"
 
 #include <string.h>
 
-#include "FSTime.h"
+#include "FSTime.hpp"
 
 #define FSResourceTracker_INITIAL_CAPACITY 16
 

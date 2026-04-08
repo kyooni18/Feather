@@ -6,7 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "Feather.h"
+#include "Feather.hpp"
 
 static int immediate_count = 0;
 static int delayed_count = 0;

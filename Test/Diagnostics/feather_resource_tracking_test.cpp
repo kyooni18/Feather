@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "Feather.h"
-#include "FeatherRuntime/FSResourceTracker.h"
+#include "Feather.hpp"
+#include "FeatherRuntime/FSResourceTracker.hpp"
 
 static uint64_t g_fake_now_ms = 0;
 static int g_counter = 0;

@@ -5,7 +5,7 @@
 `FSScheduler`는 Feather의 핵심 협력형(cooperative) 스케줄러입니다. 우선순위 큐, 지연 실행, 반복 실행, 공정성 예산, sleep 힌트를 관리합니다.
 
 주요 파일:
-- `System/FeatherRuntime/FSScheduler.h`
+- `System/FeatherRuntime/FSScheduler.hpp`
 - `System/FeatherRuntime/FSScheduler.cpp`
 
 ## 확장 모델

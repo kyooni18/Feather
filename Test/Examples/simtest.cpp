@@ -1,5 +1,5 @@
-#include <Feather.h>
-#include <FeatherRuntime/FSResourceTracker.h>
+#include <Feather.hpp>
+#include <FeatherRuntime/FSResourceTracker.hpp>
 
 #include <stdbool.h>
 #include <stdint.h>

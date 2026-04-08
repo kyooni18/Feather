@@ -10,7 +10,7 @@
  * thin wrapper functions that delegate through the struct.
  */
 
-#include "FSTime.h"
+#include "FSTime.hpp"
 
 /* FSTime_now_monotonic, FSTime_now_unix, and FSTime_sleep_ms are defined in
  * the platform backend file compiled for this target. */

@@ -25,7 +25,7 @@
 #include <mach/task_info.h>
 #endif
 
-#include "Feather.h"
+#include "Feather.hpp"
 
 #define FAST_CHECKSUM_MOD 1000000007ULL
 #define FAST_SAMPLE_INTERVAL_SEC 0.10

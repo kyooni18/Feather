@@ -12,7 +12,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include "FSTime.h"
+#include "FSTime.hpp"
 
 #include <errno.h>
 #include <stddef.h>

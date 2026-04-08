@@ -140,7 +140,7 @@ cmake --build build/minimal
 |---|---|
 | `libFeather.a` / `.so` / `.dylib` | `<prefix>/lib/` |
 | `libFeatherResourceTracking.*` (optional) | `<prefix>/lib/` |
-| `Feather.h`, `FeatherRuntime/*.h`, `FeatherExport.h` | `<prefix>/include/` |
+| `Feather.hpp`, `FeatherRuntime/*.hpp`, `FeatherExport.hpp` | `<prefix>/include/` |
 | `FeatherConfig.cmake`, `FeatherConfigVersion.cmake`, `FeatherTargets.cmake` | `<prefix>/lib/cmake/Feather/` |
 | `Feather.pc` (optional) | `<prefix>/lib/pkgconfig/` |
 

@@ -23,10 +23,10 @@ This directory contains detailed module-by-module documentation for Feather.
 
 | Public header | Document |
 |---|---|
-| `System/Feather.h` | [01-core-feather.md](./01-core-feather.md) |
-| `System/FeatherRuntime/FSScheduler.h` | [02-scheduler-fsscheduler.md](./02-scheduler-fsscheduler.md) |
-| `System/FeatherRuntime/FSTime.h` | [03-time-fstime.md](./03-time-fstime.md) |
-| `System/FeatherRuntime/FSAllocator.h` | [04-allocator-fsallocator.md](./04-allocator-fsallocator.md) |
-| `System/FeatherRuntime/FSResourceTracker.h` | [05-resource-tracker-fsresourcetracker.md](./05-resource-tracker-fsresourcetracker.md) |
-| `System/FeatherExport.h` | [07-export-featherexport.md](./07-export-featherexport.md) |
+| `System/Feather.hpp` | [01-core-feather.md](./01-core-feather.md) |
+| `System/FeatherRuntime/FSScheduler.hpp` | [02-scheduler-fsscheduler.md](./02-scheduler-fsscheduler.md) |
+| `System/FeatherRuntime/FSTime.hpp` | [03-time-fstime.md](./03-time-fstime.md) |
+| `System/FeatherRuntime/FSAllocator.hpp` | [04-allocator-fsallocator.md](./04-allocator-fsallocator.md) |
+| `System/FeatherRuntime/FSResourceTracker.hpp` | [05-resource-tracker-fsresourcetracker.md](./05-resource-tracker-fsresourcetracker.md) |
+| `System/FeatherExport.hpp` | [07-export-featherexport.md](./07-export-featherexport.md) |
 | `Makefile`, `CMakeLists.txt` | [06-build-test-packaging.md](./06-build-test-packaging.md) |

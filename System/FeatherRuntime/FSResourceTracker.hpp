@@ -1,9 +1,9 @@
 #ifndef FS_RESOURCE_TRACKER_H
 #define FS_RESOURCE_TRACKER_H
 
-#include "../FeatherExport.h"
-#include "FSAllocator.h"
-#include "FSScheduler.h"
+#include "../FeatherExport.hpp"
+#include "FSAllocator.hpp"
+#include "FSScheduler.hpp"
 
 #include <stdbool.h>
 #include <stddef.h>

@@ -5,7 +5,7 @@
 `FSTime` abstracts clock and sleeping operations for portability.
 
 Main files:
-- `System/FeatherRuntime/FSTime.h`
+- `System/FeatherRuntime/FSTime.hpp`
 - `System/FeatherRuntime/FSTime.cpp`
 - `System/FeatherRuntime/FSTime_posix.cpp`
 - `System/FeatherRuntime/FSTime_windows.cpp`
@@ -40,7 +40,7 @@ These wrappers use the currently configured provider default (`FSTime_init`).
 ## Usage Example
 
 ```c
-#include "FeatherRuntime/FSTime.h"
+#include "FeatherRuntime/FSTime.hpp"
 #include <stdio.h>
 
 int main(void) {

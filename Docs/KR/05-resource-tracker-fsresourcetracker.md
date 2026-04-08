@@ -5,7 +5,7 @@
 `FSResourceTracker`는 선택적 모듈로, Feather 내부 할당을 추적하여 활성 할당, 피크, 누적 할당/해제량, 누수 여부를 점검할 수 있게 합니다.
 
 주요 파일:
-- `System/FeatherRuntime/FSResourceTracker.h`
+- `System/FeatherRuntime/FSResourceTracker.hpp`
 - `System/FeatherRuntime/FSResourceTracker.cpp`
 
 이 모듈은 **링크 가능한 확장** 입니다 — 코어 `Feather` 라이브러리에 의존하는 별도 라이브러리(`FeatherResourceTracking`)로 빌드됩니다. 이 확장을 링크하지 않으면 기본 `Feather` 모델은 변경되지 않습니다.
