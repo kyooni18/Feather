@@ -1,8 +1,0 @@
-[
-{
-  "directory": "/Users/kyooni18/Feather/build",
-  "command": "/Users/kyooni18/.swiftly/bin/clang++ -I/Users/kyooni18/Feather/FeatherSystem -I/Users/kyooni18/Feather/FeatherSystem/FeatherRuntime -g -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles/feather_demo.dir/FeatherSystem/FeatherRuntime/FSScheduler.cpp.o -c /Users/kyooni18/Feather/FeatherSystem/FeatherRuntime/FSScheduler.cpp",
-  "file": "/Users/kyooni18/Feather/FeatherSystem/FeatherRuntime/FSScheduler.cpp",
-  "output": "/Users/kyooni18/Feather/build/CMakeFiles/feather_demo.dir/FeatherSystem/FeatherRuntime/FSScheduler.cpp.o"
-}
-]
