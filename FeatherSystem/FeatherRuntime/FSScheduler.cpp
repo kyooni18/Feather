@@ -2,20 +2,21 @@
 #include <cstdio>
 #include <limits>
 
-FSScheduler::FSScheduler() {
-    instant_tasks = {};
-    instant_task_budgets = {};
-    instant_task_ids = {};
-    instant_task_records = {};
-    timed_tasks = {};
-    timed_task_timestamps = {};
-    timed_task_periods = {};
-    timed_task_budgets = {};
-    timed_task_ids = {};
-    timed_task_types = {};
-    timed_task_repeat_allocation_types = {};
-    periodic_tasks = {};
-    next_wakeup_time = 0;
+FSScheduler::FSScheduler(FSTime& clock_src)
+    : clock(clock_src)
+    , instant_tasks{}
+    , instant_task_budgets{}
+    , instant_task_ids{}
+    , instant_task_records{}
+    , timed_tasks{}
+    , timed_task_timestamps{}
+    , timed_task_periods{}
+    , timed_task_budgets{}
+    , timed_task_ids{}
+    , timed_task_types{}
+    , timed_task_repeat_allocation_types{}
+    , periodic_tasks{}
+    , next_wakeup_time{0} {
 }
 
 void FSScheduler::rebuild_instant_schedule() {
@@ -154,36 +155,4 @@ const std::vector<uint64_t>& FSScheduler::debug_instant_task_ids() const {
 
 const std::vector<uint8_t>& FSScheduler::debug_instant_task_budgets() const {
     return instant_task_budgets;
-}
-
-int main() {
-    FSScheduler scheduler;
-
-    auto budget = [](uint8_t weight, uint8_t quantum) {
-        return fs_budget_pack(weight, quantum);
-    };
-
-    // Add 4 tasks with descending weights to verify 44443332211-style ordering.
-    scheduler.add_instant_task(nullptr, budget(4, 1));
-    scheduler.add_instant_task(nullptr, budget(3, 1));
-    scheduler.add_instant_task(nullptr, budget(2, 1));
-    scheduler.add_instant_task(nullptr, budget(1, 1));
-
-    std::printf("Instant schedule weights (interleaved): ");
-    for (uint8_t b : scheduler.debug_instant_task_budgets()) {
-        std::printf("%u", static_cast<unsigned>(fs_budget_weight(b)));
-    }
-    std::printf("\n");
-
-    // Timed tasks demo (ms).
-    scheduler.add_deferred_task(nullptr, /*timestamp_ms=*/1200, budget(1, 1));
-    scheduler.add_periodic_task(nullptr, /*start_timestamp_ms=*/1500, /*period_ms=*/1000, budget(1, 1), Absolute);
-
-    const uint64_t now_ms = 1000;
-    const uint64_t next_ms = scheduler.calculate_next_wakeup_time_ms(now_ms);
-    std::printf("Next wakeup at ms: %llu (now=%llu)\n",
-        static_cast<unsigned long long>(next_ms),
-        static_cast<unsigned long long>(now_ms)
-    );
-    return 0;
 }

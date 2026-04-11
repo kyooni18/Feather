@@ -2,6 +2,7 @@
 #define FEATHER_FSSCHEDULER_H
 #include <vector>
 #include <cstdint>
+#include "FSTime.hpp"
 
 static inline uint8_t fs_budget_weight(uint8_t budget) {
     return static_cast<uint8_t>((budget >> 4) & 0x0F);
@@ -50,6 +51,8 @@ class FSScheduler {
         Deferred, Periodic
     };
 
+    FSTime clock;
+
     std::vector<void (*)(...)> instant_tasks;
     std::vector<uint8_t> instant_task_budgets;
     std::vector<uint64_t> instant_task_ids;
@@ -79,7 +82,7 @@ class FSScheduler {
 
     public:
 
-    FSScheduler();
+    FSScheduler(FSTime& clock_src);
 
     uint64_t add_instant_task(void (*task)(...), uint8_t budget);
 
