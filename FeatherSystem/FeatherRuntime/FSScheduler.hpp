@@ -11,14 +11,14 @@ static inline uint8_t fs_budget_translate(uint8_t budget) {
 
 static inline uint16_t fs_budget_pair_pack(uint8_t first_budget, uint8_t second_budget) {
     return static_cast<uint16_t>(
-        (static_cast<uint16_t>(first_budget & 0x0F) << 8) |
+        (static_cast<uint16_t>(first_budget & 0x0F) << 4) |
         static_cast<uint16_t>(second_budget & 0x0F)
     );
 }
 
 static inline uint8_t fs_budget_pair_get(uint16_t packed_budgets, bool first_budget) {
     if (first_budget) {
-        return static_cast<uint8_t>((packed_budgets >> 8) & 0x0F);
+        return static_cast<uint8_t>((packed_budgets >> 4) & 0x0F);
     }
     return static_cast<uint8_t>(packed_budgets & 0x0F);
 }
