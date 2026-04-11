@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug test1",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/dist/test1",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build test1",
+      "MIMode": "lldb",
+      "externalConsole": false
+    }
+  ]
+}
