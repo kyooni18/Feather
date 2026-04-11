@@ -2,6 +2,17 @@
 #include <limits>
 #include <numeric>
 
+static inline void fs_push_packed_budget(std::vector<uint16_t>& packed_budgets, size_t budget_index, uint8_t budget) {
+    const uint8_t translated_budget = fs_budget_translate(budget);
+    if ((budget_index & 1U) == 0U) {
+        packed_budgets.push_back(fs_budget_pair_pack(translated_budget, 0));
+        return;
+    }
+    const size_t pair_index = budget_index / 2U;
+    const uint8_t first_budget = fs_budget_pair_get(packed_budgets[pair_index], true);
+    packed_budgets[pair_index] = fs_budget_pair_pack(first_budget, translated_budget);
+}
+
 FSScheduler::FSScheduler(FSTime& clock_src)
     : clock(clock_src)
     , instant_tasks{}
@@ -40,7 +51,7 @@ void FSScheduler::rebuild_instant_schedule_if_dirty() {
     weights.reserve(n);
     uint64_t total_weight = 0;
     for (const auto& rec : instant_task_records) {
-        const uint8_t w = fs_budget_weight(rec.budget);
+        const uint8_t w = fs_budget_translate(rec.budget);
         weights.push_back(w);
         total_weight += w;
     }
@@ -97,7 +108,8 @@ void FSScheduler::rebuild_instant_schedule_if_dirty() {
 
         const auto& rec = instant_task_records[best_i];
         instant_tasks.push_back(rec.task);
-        instant_task_budgets.push_back(rec.budget);
+        const size_t budget_index = instant_task_ids.size();
+        fs_push_packed_budget(instant_task_budgets, budget_index, rec.budget);
         instant_task_ids.push_back(rec.id);
 
         cursor = best_i;
@@ -107,13 +119,13 @@ void FSScheduler::rebuild_instant_schedule_if_dirty() {
 }
 
 uint64_t FSScheduler::add_instant_task(void (*task)(...), uint8_t budget) {
-    const uint8_t weight = fs_budget_weight(budget);
+    const uint8_t weight = fs_budget_translate(budget);
     if (weight == 0) {
         return 0;
     }
 
     const uint64_t id = next_id++;
-    instant_task_records.push_back(InstantTaskRecord{task, budget, id});
+    instant_task_records.push_back(InstantTaskRecord{task, weight, id});
     instant_cycle_dirty = true;
     return id;
 }
@@ -123,7 +135,7 @@ uint64_t FSScheduler::add_deferred_task(void (*task)(...), uint64_t timestamp_ms
     timed_tasks.push_back(task);
     timed_task_timestamps.push_back(timestamp_ms);
     timed_task_periods.push_back(0);
-    timed_task_budgets.push_back(budget);
+    timed_task_budgets.push_back(fs_budget_translate(budget));
     timed_task_ids.push_back(id);
     timed_task_types.push_back(TimedTaskType::Deferred);
     timed_task_repeat_allocation_types.push_back(FSSchedulerPeriodicTaskRepeatAllocationType::Absolute);
@@ -142,12 +154,13 @@ uint64_t FSScheduler::add_periodic_task(
     timed_tasks.push_back(task);
     timed_task_timestamps.push_back(start_timestamp_ms);
     timed_task_periods.push_back(period_ms);
-    timed_task_budgets.push_back(budget);
+    const uint8_t translated_budget = fs_budget_translate(budget);
+    timed_task_budgets.push_back(translated_budget);
     timed_task_ids.push_back(id);
     timed_task_types.push_back(TimedTaskType::Periodic);
     timed_task_repeat_allocation_types.push_back(allocation_type);
 
-    periodic_tasks.push_back(FSSchedulerPeriodicTask(task, budget, period_ms, start_timestamp_ms, allocation_type));
+    periodic_tasks.push_back(FSSchedulerPeriodicTask(task, translated_budget, period_ms, start_timestamp_ms, allocation_type));
     periodic_tasks.back().id = id;
     timed_wake_min_heap.push(start_timestamp_ms);
     return id;
@@ -178,7 +191,7 @@ const std::vector<uint64_t>& FSScheduler::debug_instant_task_ids() const {
     return instant_task_ids;
 }
 
-const std::vector<uint8_t>& FSScheduler::debug_instant_task_budgets() const {
+const std::vector<uint16_t>& FSScheduler::debug_instant_task_budgets() const {
     const_cast<FSScheduler*>(this)->rebuild_instant_schedule_if_dirty();
     return instant_task_budgets;
 }

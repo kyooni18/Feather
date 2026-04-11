@@ -5,16 +5,22 @@
 #include <cstdint>
 #include "FSTime.hpp"
 
-static inline uint8_t fs_budget_weight(uint8_t budget) {
-    return static_cast<uint8_t>((budget >> 4) & 0x0F);
-}
-
-static inline uint8_t fs_budget_quantum(uint8_t budget) {
+static inline uint8_t fs_budget_translate(uint8_t budget) {
     return static_cast<uint8_t>(budget & 0x0F);
 }
 
-static inline uint8_t fs_budget_pack(uint8_t weight, uint8_t quantum) {
-    return static_cast<uint8_t>(((weight & 0x0F) << 4) | (quantum & 0x0F));
+static inline uint16_t fs_budget_pair_pack(uint8_t first_budget, uint8_t second_budget) {
+    return static_cast<uint16_t>(
+        (static_cast<uint16_t>(first_budget & 0x0F) << 8) |
+        static_cast<uint16_t>(second_budget & 0x0F)
+    );
+}
+
+static inline uint8_t fs_budget_pair_get(uint16_t packed_budgets, bool first_budget) {
+    if (first_budget) {
+        return static_cast<uint8_t>((packed_budgets >> 8) & 0x0F);
+    }
+    return static_cast<uint8_t>(packed_budgets & 0x0F);
 }
 
 enum FSSchedulerPeriodicTaskRepeatAllocationType {
@@ -55,12 +61,12 @@ class FSScheduler {
     FSTime clock;
 
     std::vector<void (*)(...)> instant_tasks;
-    std::vector<uint8_t> instant_task_budgets;
+    std::vector<uint16_t> instant_task_budgets;
     std::vector<uint64_t> instant_task_ids;
 
     struct InstantTaskRecord {
         void (*task)(...) = nullptr;
-        uint8_t budget = 0; // high nibble: weight, low nibble: quantum/cost
+        uint8_t budget = 0;
         uint64_t id = 0;
     };
 
@@ -106,7 +112,7 @@ class FSScheduler {
 
     const std::vector<uint64_t>& debug_instant_task_ids() const;
 
-    const std::vector<uint8_t>& debug_instant_task_budgets() const;
+    const std::vector<uint16_t>& debug_instant_task_budgets() const;
 };
 
 #endif //FEATHER_FSSCHEDULER_H
