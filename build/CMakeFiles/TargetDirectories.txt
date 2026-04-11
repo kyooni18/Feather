@@ -1,3 +1,0 @@
-/Users/kyooni18/Feather/build/CMakeFiles/feather_demo.dir
-/Users/kyooni18/Feather/build/CMakeFiles/edit_cache.dir
-/Users/kyooni18/Feather/build/CMakeFiles/rebuild_cache.dir
