@@ -17,6 +17,6 @@ void print_hi() {
 int main() {
     Feather feather(&current_time);
     feather.InstantTask(reinterpret_cast<void (*)(...)>(print_hi), 0);
-
+    
     return 0;
 }
