@@ -1,6 +1,7 @@
 #ifndef FEATHER_FSSCHEDULER_H
 #define FEATHER_FSSCHEDULER_H
 #include <vector>
+#include <queue>
 #include <cstdint>
 #include "FSTime.hpp"
 
@@ -75,10 +76,13 @@ class FSScheduler {
     std::vector<FSSchedulerPeriodicTaskRepeatAllocationType> timed_task_repeat_allocation_types;
     std::vector<FSSchedulerPeriodicTask> periodic_tasks;
     uint64_t next_wakeup_time;
+    std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> timed_wake_min_heap;
+
+    bool instant_cycle_dirty = true;
 
     uint64_t next_id = 1;
 
-    void rebuild_instant_schedule();
+    void rebuild_instant_schedule_if_dirty();
 
     public:
 
