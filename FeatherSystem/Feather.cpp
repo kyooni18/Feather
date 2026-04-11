@@ -3,8 +3,11 @@
 
 Feather::Feather():
     clock([]() -> uint64_t { return 0; }),
-    scheduler(clock) {
-}
+    scheduler(clock) {}
+
+Feather::Feather(uint64_t (*current_time_ms_)())
+    : clock(current_time_ms_),
+      scheduler(clock) {}
 
 void Feather::InstantTask(void (*task_to_run)(...), uint8_t priority) {
     scheduler.add_instant_task(task_to_run, priority);

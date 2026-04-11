@@ -9,6 +9,7 @@ class Feather {
 
     public:
     Feather();
+    Feather(uint64_t (*current_time_ms_)());
 
     void InstantTask(void (*task_to_run)(...), uint8_t priority);
     void DefferedTask(void (*task_to_run)(...), uint64_t time_to_run, uint8_t priority);
