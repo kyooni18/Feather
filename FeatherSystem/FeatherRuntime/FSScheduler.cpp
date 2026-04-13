@@ -4,21 +4,15 @@
 
 FSScheduler::FSScheduler(FSTime& clock_src)
     : clock(clock_src)
+    , instant_task_records{}
     , instant_tasks{}
     , instant_task_budgets{}
     , instant_task_ids{}
-    , instant_task_records{}
-    , timed_tasks{}
-    , timed_task_timestamps{}
-    , timed_task_periods{}
-    , timed_task_budgets{}
-    , timed_task_ids{}
-    , timed_task_types{}
-    , timed_task_repeat_allocation_types{}
-    , periodic_tasks{}
+    , instant_rr_cursor{0}
+    , instant_cycle_dirty{true}
+    , timed_heap{}
     , next_wakeup_time{0}
-    , timed_wake_min_heap{}
-    , instant_cycle_dirty{true} {
+    , next_id{1} {
 }
 
 void FSScheduler::rebuild_instant_schedule_if_dirty() {
@@ -50,9 +44,7 @@ void FSScheduler::rebuild_instant_schedule_if_dirty() {
 
     uint64_t g = 0;
     for (uint8_t w : weights) {
-        if (w == 0) {
-            continue;
-        }
+        if (w == 0) continue;
         g = (g == 0) ? w : std::gcd(g, static_cast<uint64_t>(w));
     }
     if (g > 1) {
@@ -63,9 +55,7 @@ void FSScheduler::rebuild_instant_schedule_if_dirty() {
         }
     }
 
-    std::vector<int64_t> current;
-    current.assign(n, 0);
-
+    std::vector<int64_t> current(n, 0);
     size_t cursor = (instant_rr_cursor < n) ? instant_rr_cursor : 0;
 
     for (uint64_t slot = 0; slot < total_weight; ++slot) {
@@ -73,25 +63,20 @@ void FSScheduler::rebuild_instant_schedule_if_dirty() {
             current[i] += static_cast<int64_t>(weights[i]);
         }
 
-        size_t best_i = 0;
+        size_t  best_i   = 0;
         int64_t best_val = std::numeric_limits<int64_t>::min();
-        bool best_set = false;
+        bool    best_set = false;
 
         for (size_t step = 0; step < n; ++step) {
             const size_t i = (cursor + 1 + step) % n;
-            if (weights[i] == 0) {
-                continue;
-            }
-            const int64_t v = current[i];
-            if (!best_set || v > best_val) {
+            if (weights[i] == 0) continue;
+            if (!best_set || current[i] > best_val) {
                 best_set = true;
-                best_val = v;
-                best_i = i;
+                best_val = current[i];
+                best_i   = i;
             }
         }
-        if (!best_set) {
-            break;
-        }
+        if (!best_set) break;
 
         current[best_i] -= static_cast<int64_t>(total_weight);
 
@@ -108,9 +93,7 @@ void FSScheduler::rebuild_instant_schedule_if_dirty() {
 
 uint64_t FSScheduler::add_instant_task(void (*task)(...), uint8_t budget) {
     const uint8_t weight = fs_budget_weight(budget);
-    if (weight == 0) {
-        return 0;
-    }
+    if (weight == 0) return 0;
 
     const uint64_t id = next_id++;
     instant_task_records.push_back(InstantTaskRecord{task, budget, id});
@@ -120,14 +103,11 @@ uint64_t FSScheduler::add_instant_task(void (*task)(...), uint8_t budget) {
 
 uint64_t FSScheduler::add_deferred_task(void (*task)(...), uint64_t timestamp_ms, uint8_t budget) {
     const uint64_t id = next_id++;
-    timed_tasks.push_back(task);
-    timed_task_timestamps.push_back(timestamp_ms);
-    timed_task_periods.push_back(0);
-    timed_task_budgets.push_back(budget);
-    timed_task_ids.push_back(id);
-    timed_task_types.push_back(TimedTaskType::Deferred);
-    timed_task_repeat_allocation_types.push_back(FSSchedulerPeriodicTaskRepeatAllocationType::Absolute);
-    timed_wake_min_heap.push(timestamp_ms);
+    timed_heap.push(TimedTaskRecord{
+        timestamp_ms, task, budget,
+        /*period_ms=*/0, id,
+        FSSchedulerPeriodicTaskRepeatAllocationType::Absolute
+    });
     return id;
 }
 
@@ -135,37 +115,25 @@ uint64_t FSScheduler::add_periodic_task(
     void (*task)(...),
     uint64_t start_timestamp_ms,
     uint32_t period_ms,
-    uint8_t budget,
+    uint8_t  budget,
     FSSchedulerPeriodicTaskRepeatAllocationType allocation_type
 ) {
     const uint64_t id = next_id++;
-    timed_tasks.push_back(task);
-    timed_task_timestamps.push_back(start_timestamp_ms);
-    timed_task_periods.push_back(period_ms);
-    timed_task_budgets.push_back(budget);
-    timed_task_ids.push_back(id);
-    timed_task_types.push_back(TimedTaskType::Periodic);
-    timed_task_repeat_allocation_types.push_back(allocation_type);
-
-    periodic_tasks.push_back(FSSchedulerPeriodicTask(task, budget, period_ms, start_timestamp_ms, allocation_type));
-    periodic_tasks.back().id = id;
-    timed_wake_min_heap.push(start_timestamp_ms);
+    timed_heap.push(TimedTaskRecord{
+        start_timestamp_ms, task, budget,
+        period_ms, id, allocation_type
+    });
     return id;
 }
 
 uint64_t FSScheduler::calculate_next_wakeup_time_ms(uint64_t now_ms) {
-    if (timed_wake_min_heap.empty()) {
+    if (timed_heap.empty()) {
         next_wakeup_time = 0;
-        return next_wakeup_time;
+        return 0;
     }
 
-    const uint64_t earliest = timed_wake_min_heap.top();
-    if (earliest <= now_ms) {
-        next_wakeup_time = now_ms;
-        return next_wakeup_time;
-    }
-
-    next_wakeup_time = earliest;
+    const uint64_t earliest = timed_heap.top().next_fire_ms;
+    next_wakeup_time = (earliest <= now_ms) ? now_ms : earliest;
     return next_wakeup_time;
 }
 

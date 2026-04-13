@@ -21,68 +21,62 @@ enum FSSchedulerPeriodicTaskRepeatAllocationType {
     Relative, Absolute
 };
 
-struct FSSchedulerPeriodicTask {
-    void (*task)(...) = nullptr;
-    FSSchedulerPeriodicTaskRepeatAllocationType repeat_allocation_type = FSSchedulerPeriodicTaskRepeatAllocationType::Absolute;
-    uint8_t budget = 0;
-    uint32_t period_ms = 0;
-    uint64_t start_time_ms = 0;
-    uint64_t id = 0;
-
-    FSSchedulerPeriodicTask() = default;
-    FSSchedulerPeriodicTask(
-        void (*task_to_run)(...),
-        uint8_t task_budget,
-        uint32_t repeat_period_ms,
-        uint64_t task_start_time_ms,
-        FSSchedulerPeriodicTaskRepeatAllocationType allocation_type = FSSchedulerPeriodicTaskRepeatAllocationType::Absolute
-    ) {
-        task = task_to_run;
-        budget = task_budget;
-        period_ms = repeat_period_ms;
-        start_time_ms = task_start_time_ms;
-        id = 0;
-        repeat_allocation_type = allocation_type;
-    }
-};
-
 class FSScheduler {
     private:
-    enum TimedTaskType {
-        Deferred, Periodic
-    };
 
     FSTime clock;
 
-    std::vector<void (*)(...)> instant_tasks;
-    std::vector<uint8_t> instant_task_budgets;
-    std::vector<uint64_t> instant_task_ids;
+    // --- Instant tasks (weighted round-robin) ---
 
     struct InstantTaskRecord {
         void (*task)(...) = nullptr;
-        uint8_t budget = 0; // high nibble: weight, low nibble: quantum/cost
+        uint8_t budget = 0;  // high nibble: weight, low nibble: quantum/cost
         uint64_t id = 0;
     };
 
     std::vector<InstantTaskRecord> instant_task_records;
+
+    // Rebuilt lazily from instant_task_records when instant_cycle_dirty is set.
+    std::vector<void (*)(...)> instant_tasks;
+    std::vector<uint8_t>       instant_task_budgets;
+    std::vector<uint64_t>      instant_task_ids;
     size_t instant_rr_cursor = 0;
-
-    std::vector<void (*)(...)> timed_tasks;
-    std::vector<uint64_t> timed_task_timestamps;
-    std::vector<uint32_t> timed_task_periods;
-    std::vector<uint8_t> timed_task_budgets;
-    std::vector<uint64_t> timed_task_ids; 
-    std::vector<TimedTaskType> timed_task_types;
-    std::vector<FSSchedulerPeriodicTaskRepeatAllocationType> timed_task_repeat_allocation_types;
-    std::vector<FSSchedulerPeriodicTask> periodic_tasks;
-    uint64_t next_wakeup_time;
-    std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> timed_wake_min_heap;
-
-    bool instant_cycle_dirty = true;
-
-    uint64_t next_id = 1;
+    bool   instant_cycle_dirty = true;
 
     void rebuild_instant_schedule_if_dirty();
+
+    // --- Timed tasks (deferred + periodic) ---
+    //
+    // Single min-heap keyed on next_fire_ms.
+    // period_ms == 0  →  one-shot deferred task
+    // period_ms  > 0  →  periodic task
+    //
+    // O(log n) insert/reschedule, O(1) peek at the earliest deadline.
+    // No parallel vectors, no secondary timestamp-only heap.
+
+    struct TimedTaskRecord {
+        uint64_t next_fire_ms = 0;
+        void (*task)(...) = nullptr;
+        uint8_t  budget    = 0;
+        uint32_t period_ms = 0;
+        uint64_t id        = 0;
+        FSSchedulerPeriodicTaskRepeatAllocationType repeat_type =
+            FSSchedulerPeriodicTaskRepeatAllocationType::Absolute;
+    };
+
+    struct TimedTaskCmp {
+        // Makes std::priority_queue a min-heap on next_fire_ms.
+        bool operator()(const TimedTaskRecord& a, const TimedTaskRecord& b) const {
+            return a.next_fire_ms > b.next_fire_ms;
+        }
+    };
+
+    std::priority_queue<TimedTaskRecord,
+                        std::vector<TimedTaskRecord>,
+                        TimedTaskCmp> timed_heap;
+
+    uint64_t next_wakeup_time = 0;
+    uint64_t next_id = 1;
 
     public:
 
@@ -97,16 +91,17 @@ class FSScheduler {
         uint64_t start_timestamp_ms,
         uint32_t period_ms,
         uint8_t budget,
-        FSSchedulerPeriodicTaskRepeatAllocationType allocation_type = FSSchedulerPeriodicTaskRepeatAllocationType::Absolute
+        FSSchedulerPeriodicTaskRepeatAllocationType allocation_type =
+            FSSchedulerPeriodicTaskRepeatAllocationType::Absolute
     );
 
     uint64_t calculate_next_wakeup_time_ms(uint64_t now_ms);
 
     uint64_t get_next_wakeup_time_ms() const;
 
-    const std::vector<uint64_t>& debug_instant_task_ids() const;
 
-    const std::vector<uint8_t>& debug_instant_task_budgets() const;
+    const std::vector<uint64_t>& debug_instant_task_ids() const;
+    const std::vector<uint8_t>&  debug_instant_task_budgets() const;
 };
 
 #endif //FEATHER_FSSCHEDULER_H
