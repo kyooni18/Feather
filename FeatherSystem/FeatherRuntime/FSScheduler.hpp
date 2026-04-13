@@ -4,6 +4,7 @@
 #include <queue>
 #include <cstdint>
 #include "FSTime.hpp"
+#include <functional>
 
 static inline uint8_t fs_budget_weight(uint8_t budget) {
     return static_cast<uint8_t>((budget >> 4) & 0x0F);
@@ -29,7 +30,7 @@ class FSScheduler {
     // --- Instant tasks (weighted round-robin) ---
 
     struct InstantTaskRecord {
-        void (*task)(...) = nullptr;
+        std::function<void()> task = nullptr;
         uint8_t budget = 0;  // high nibble: weight, low nibble: quantum/cost
         uint64_t id = 0;
     };
@@ -37,7 +38,7 @@ class FSScheduler {
     std::vector<InstantTaskRecord> instant_task_records;
 
     // Rebuilt lazily from instant_task_records when instant_cycle_dirty is set.
-    std::vector<void (*)(...)> instant_tasks;
+    std::vector<std::function<void()>> instant_tasks;
     std::vector<uint8_t>       instant_task_budgets;
     std::vector<uint64_t>      instant_task_ids;
     size_t instant_rr_cursor = 0;
@@ -56,7 +57,7 @@ class FSScheduler {
 
     struct TimedTaskRecord {
         uint64_t next_fire_ms = 0;
-        void (*task)(...) = nullptr;
+        std::function<void()> task = nullptr;
         uint8_t  budget    = 0;
         uint32_t period_ms = 0;
         uint64_t id        = 0;
@@ -82,12 +83,12 @@ class FSScheduler {
 
     FSScheduler(FSTime& clock_src);
 
-    uint64_t add_instant_task(void (*task)(...), uint8_t budget);
+    uint64_t add_instant_task(std::function<void()> task, uint8_t budget);
 
-    uint64_t add_deferred_task(void (*task)(...), uint64_t timestamp_ms, uint8_t budget);
+    uint64_t add_deferred_task(std::function<void()> task, uint64_t timestamp_ms, uint8_t budget);
 
     uint64_t add_periodic_task(
-        void (*task)(...),
+        std::function<void()> task,
         uint64_t start_timestamp_ms,
         uint32_t period_ms,
         uint8_t budget,
@@ -99,6 +100,7 @@ class FSScheduler {
 
     uint64_t get_next_wakeup_time_ms() const;
 
+    void step();
 
     const std::vector<uint64_t>& debug_instant_task_ids() const;
     const std::vector<uint8_t>&  debug_instant_task_budgets() const;

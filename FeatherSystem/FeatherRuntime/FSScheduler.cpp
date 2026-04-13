@@ -1,6 +1,7 @@
 #include "FSScheduler.hpp"
 #include <limits>
 #include <numeric>
+#include <functional>
 
 FSScheduler::FSScheduler(FSTime& clock_src)
     : clock(clock_src)
@@ -91,7 +92,7 @@ void FSScheduler::rebuild_instant_schedule_if_dirty() {
     instant_rr_cursor = cursor;
 }
 
-uint64_t FSScheduler::add_instant_task(void (*task)(...), uint8_t budget) {
+uint64_t FSScheduler::add_instant_task(std::function<void()> task, uint8_t budget) {
     const uint8_t weight = fs_budget_weight(budget);
     if (weight == 0) return 0;
 
@@ -101,7 +102,7 @@ uint64_t FSScheduler::add_instant_task(void (*task)(...), uint8_t budget) {
     return id;
 }
 
-uint64_t FSScheduler::add_deferred_task(void (*task)(...), uint64_t timestamp_ms, uint8_t budget) {
+uint64_t FSScheduler::add_deferred_task(std::function<void()> task, uint64_t timestamp_ms, uint8_t budget) {
     const uint64_t id = next_id++;
     timed_heap.push(TimedTaskRecord{
         timestamp_ms, task, budget,
@@ -112,7 +113,7 @@ uint64_t FSScheduler::add_deferred_task(void (*task)(...), uint64_t timestamp_ms
 }
 
 uint64_t FSScheduler::add_periodic_task(
-    void (*task)(...),
+    std::function<void()> task,
     uint64_t start_timestamp_ms,
     uint32_t period_ms,
     uint8_t  budget,
@@ -139,6 +140,51 @@ uint64_t FSScheduler::calculate_next_wakeup_time_ms(uint64_t now_ms) {
 
 uint64_t FSScheduler::get_next_wakeup_time_ms() const {
     return next_wakeup_time;
+}
+
+void FSScheduler::step() {
+    const uint64_t now_ms = clock.now_ms();
+
+    rebuild_instant_schedule_if_dirty();
+
+    if (!instant_tasks.empty()) {
+        if (instant_rr_cursor >= instant_tasks.size()) {
+            instant_rr_cursor = 0;
+        }
+
+        auto& task = instant_tasks[instant_rr_cursor];
+        if (task) {
+            task();
+        }
+
+        instant_rr_cursor = (instant_rr_cursor + 1) % instant_tasks.size();
+    }
+
+    while (!timed_heap.empty() && timed_heap.top().next_fire_ms <= now_ms) {
+        TimedTaskRecord record = timed_heap.top();
+        timed_heap.pop();
+
+        if (record.task) {
+            record.task();
+        }
+
+        if (record.period_ms != 0) {
+            uint64_t next_fire_ms;
+            if (record.repeat_type == Absolute) {
+                next_fire_ms = record.next_fire_ms + record.period_ms;
+                while (next_fire_ms <= now_ms) {
+                    next_fire_ms += record.period_ms;
+                }
+            } else {
+                next_fire_ms = now_ms + record.period_ms;
+            }
+
+            record.next_fire_ms = next_fire_ms;
+            timed_heap.push(std::move(record));
+        }
+    }
+
+    calculate_next_wakeup_time_ms(clock.now_ms());
 }
 
 const std::vector<uint64_t>& FSScheduler::debug_instant_task_ids() const {

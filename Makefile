@@ -32,7 +32,7 @@ VERSION     ?= 0.1.0
 FEATHER_SYS := FeatherSystem
 
 SRCS := \
-	$(FEATHER_SYS)/Feather/Feather.cpp \
+	$(FEATHER_SYS)/Feather.cpp \
 	$(FEATHER_SYS)/FeatherRuntime/FSScheduler.cpp \
 	$(FEATHER_SYS)/FeatherRuntime/FSTime.cpp
 
@@ -95,9 +95,11 @@ install-libs: static shared
 	install -m 755 $(SHARED) $(DESTDIR)$(LIBDIR)/
 
 install-headers:
+	install -d $(DESTDIR)$(INCLUDEDIR)/Feather
 	install -d $(DESTDIR)$(INCLUDEDIR)/Feather/FeatherRuntime
-	install -m 644 $(FEATHER_SYS)/Feather/Feather.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/
-	install -m 644 $(FEATHER_SYS)/FeatherRuntime/*.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/FeatherRuntime/
+	install -m 644 $(FEATHER_SYS)/Feather.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/
+	install -m 644 $(FEATHER_SYS)/FeatherRuntime/FSScheduler.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/FeatherRuntime/
+	install -m 644 $(FEATHER_SYS)/FeatherRuntime/FSTime.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/FeatherRuntime/
 
 # Written with final PREFIX (not DESTDIR); standard for relocatable .pc after unpack.
 install-pkgconfig:
