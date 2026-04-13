@@ -14,7 +14,7 @@ int main() {
 	int count = 0;
 	Feather feather(get_current_time_ms);
 
-	for(int i = 0; i < 5000; i++) {
+	for(int i = 0; i < 100000; i++) {
 		feather.PeriodicTask([=, &count]() {
 		count++;
 		

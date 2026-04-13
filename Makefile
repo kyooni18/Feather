@@ -1,23 +1,21 @@
-# Feather: build and install as a C++ library (static + shared).
+# Feather: build and install as a C++ library (static + shared + Arduino export).
 #
 # Build:
-#   make -r                 # recommended: no built-in implicit rules (avoids stray .o in the tree)
-#   make                    # static + shared into dist/
+#   make -r
+#   make
 #
-# Install (system default /usr/local):
+# Install:
 #   sudo make install
-#
-# Install to a staging tree (packaging):
 #   make install DESTDIR=/tmp/stage PREFIX=/usr
 #
-# Install only headers or only libraries:
-#   make install-headers
-#   make install-libs
+# Arduino export:
+#   make arduino-export
+#   make arduino-install ARDUINO_LIBDIR=~/Documents/Arduino/libraries
 #
-# Consumption (Feather/ include dir avoids unrelated top-level Feather.hpp / FeatherC):
+# Consumption:
 #   c++ ... -std=c++17 -I<prefix>/include -L<prefix>/lib -lFeather
 #   #include <Feather/Feather.hpp>
-#   pkg-config --cflags --libs Feather   # after install (PKG_CONFIG_PATH if needed)
+#   pkg-config --cflags --libs Feather
 
 CXX      ?= c++
 AR       ?= ar
@@ -30,11 +28,19 @@ LIBDIR      ?= $(PREFIX)/lib
 VERSION     ?= 0.1.0
 
 FEATHER_SYS := FeatherSystem
+ARDUINO_NAME ?= Feather
+ARDUINO_OUT  ?= dist/arduino/$(ARDUINO_NAME)
+ARDUINO_LIBDIR ?= $(HOME)/Documents/Arduino/libraries
 
 SRCS := \
 	$(FEATHER_SYS)/Feather.cpp \
 	$(FEATHER_SYS)/FeatherRuntime/FSScheduler.cpp \
 	$(FEATHER_SYS)/FeatherRuntime/FSTime.cpp
+
+HDRS := \
+	$(FEATHER_SYS)/Feather.hpp \
+	$(FEATHER_SYS)/FeatherRuntime/FSScheduler.hpp \
+	$(FEATHER_SYS)/FeatherRuntime/FSTime.hpp
 
 INCLUDES := -I$(FEATHER_SYS) -I$(FEATHER_SYS)/FeatherRuntime
 
@@ -56,7 +62,8 @@ TEST_BIN := $(DIST)/test1
 
 .PHONY: all static shared test1 clean \
 	install install-libs install-headers install-pkgconfig \
-	uninstall uninstall-libs uninstall-headers uninstall-pkgconfig
+	uninstall uninstall-libs uninstall-headers uninstall-pkgconfig \
+	arduino-export arduino-install arduino-clean
 
 all: static shared
 
@@ -76,7 +83,6 @@ $(SHARED): $(OBJS)
 	@mkdir -p $(dir $@)
 	$(CXX) $(SHFLAGS) $(LDFLAGS) -o $@ $^
 
-# Test binary for local run/debug (links static lib; -g -O0 for debugging test code).
 test1: static
 	@mkdir -p $(DIST)
 	$(CXX) -std=c++17 -g -O0 -Wall -Wextra -Wpedantic -I$(FEATHER_SYS) Test/test1.cpp $(STATIC) -o $(TEST_BIN)
@@ -101,7 +107,6 @@ install-headers:
 	install -m 644 $(FEATHER_SYS)/FeatherRuntime/FSScheduler.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/FeatherRuntime/
 	install -m 644 $(FEATHER_SYS)/FeatherRuntime/FSTime.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/FeatherRuntime/
 
-# Written with final PREFIX (not DESTDIR); standard for relocatable .pc after unpack.
 install-pkgconfig:
 	install -d $(DESTDIR)$(LIBDIR)/pkgconfig
 	@echo "prefix=$(PREFIX)" > $(DESTDIR)$(LIBDIR)/pkgconfig/Feather.pc
@@ -127,3 +132,47 @@ uninstall-headers:
 
 uninstall-pkgconfig:
 	rm -f $(DESTDIR)$(LIBDIR)/pkgconfig/Feather.pc
+
+# --- Arduino export ---
+
+arduino-export: arduino-clean
+	install -d $(ARDUINO_OUT)
+	install -d $(ARDUINO_OUT)/src
+	install -d $(ARDUINO_OUT)/src/FeatherRuntime
+	@if [ -d examples ]; then cp -R examples $(ARDUINO_OUT)/; fi
+	@cp $(FEATHER_SYS)/Feather.hpp $(ARDUINO_OUT)/src/
+	@cp $(FEATHER_SYS)/Feather.cpp $(ARDUINO_OUT)/src/
+	@cp $(FEATHER_SYS)/FeatherRuntime/FSScheduler.hpp $(ARDUINO_OUT)/src/FeatherRuntime/
+	@cp $(FEATHER_SYS)/FeatherRuntime/FSScheduler.cpp $(ARDUINO_OUT)/src/FeatherRuntime/
+	@cp $(FEATHER_SYS)/FeatherRuntime/FSTime.hpp $(ARDUINO_OUT)/src/FeatherRuntime/
+	@cp $(FEATHER_SYS)/FeatherRuntime/FSTime.cpp $(ARDUINO_OUT)/src/FeatherRuntime/
+	@printf '%s\n' \
+		'name=$(ARDUINO_NAME)' \
+		'version=$(VERSION)' \
+		'author=' \
+		'maintainer=' \
+		'sentence=Feather task scheduling library' \
+		'paragraph=Feather runtime and scheduler for Arduino.' \
+		'category=Timing' \
+		'url=' \
+		'architectures=*' \
+	> $(ARDUINO_OUT)/library.properties
+	@printf '%s\n' \
+		'# $(ARDUINO_NAME)' \
+		'' \
+		'Arduino export of Feather.' \
+		'' \
+		'Include with:' \
+		'' \
+		'```cpp' \
+		'#include <Feather.hpp>' \
+		'```' \
+	> $(ARDUINO_OUT)/README.md
+
+arduino-install: arduino-export
+	rm -rf $(ARDUINO_LIBDIR)/$(ARDUINO_NAME)
+	install -d $(ARDUINO_LIBDIR)
+	cp -R $(ARDUINO_OUT) $(ARDUINO_LIBDIR)/
+
+arduino-clean:
+	rm -rf $(DIST)/arduino
