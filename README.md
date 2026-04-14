@@ -15,6 +15,8 @@ FSScheduler: single-threaded, cooperative scheduler.
 
 ## Simple usage:
 ``` C++
+#include <Feather.h> // install with "sudo make install"
+
 // ... other codes..
 
 Feather feather([]() { return uint64_t(millis()); }); // Initializes Feather with wrapper function of millis()
