@@ -9,6 +9,15 @@ FSScheduler::FSScheduler(FSTime& clock_src)
     , next_id{1} {
 }
 
+void FSScheduler::maybe_shrink_timed_heap() {
+    if (!timed_heap.empty()) {
+        return;
+    }
+
+    decltype(timed_heap) compacted;
+    timed_heap.swap(compacted);
+}
+
 uint64_t FSScheduler::calculate_next_wakeup_time_ms(uint64_t now_ms) {
     if (timed_heap.empty()) {
         next_wakeup_time = 0;
@@ -26,7 +35,6 @@ uint64_t FSScheduler::get_next_wakeup_time_ms() const {
 void FSScheduler::step() {
     const uint64_t now_ms = clock.now_ms();
 
-    // --- Instant tasks: simple round-robin over the original record vector ---
     if (!instant_task_records.empty()) {
         if (instant_rr_cursor >= instant_task_records.size()) {
             instant_rr_cursor = 0;
@@ -36,11 +44,6 @@ void FSScheduler::step() {
         instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
     }
 
-    // --- Timed tasks: drain all entries whose deadline has passed ---
-    //
-    // FSCallback is move-only, so we move out of the heap top before popping.
-    // The moved-from element retains its next_fire_ms (uint64_t, not moved),
-    // so the heap's comparator remains valid during pop_heap's sift-down.
     while (!timed_heap.empty() && timed_heap.top().next_fire_ms <= now_ms) {
         TimedTaskRecord record =
             std::move(const_cast<TimedTaskRecord&>(timed_heap.top()));
@@ -66,8 +69,8 @@ void FSScheduler::step() {
             record.next_fire_ms = next_fire_ms;
             timed_heap.push(std::move(record));
         }
-        // One-shot (deferred): record falls out of scope, FSCallback destroyed.
     }
 
+    maybe_shrink_timed_heap();
     calculate_next_wakeup_time_ms(now_ms);
 }
