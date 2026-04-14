@@ -50,10 +50,15 @@ void FSScheduler::step() {
 
         if (record.period_ms != 0) {
             uint64_t next_fire_ms;
-            if (record.repeat_type == Absolute) {
-                next_fire_ms = record.next_fire_ms + record.period_ms;
-                while (next_fire_ms <= now_ms) {
-                    next_fire_ms += record.period_ms;
+            if (record.repeat_type == static_cast<uint8_t>(Absolute)) {
+                const uint64_t base_fire = record.next_fire_ms;
+                const uint64_t period = record.period_ms;
+                if (base_fire > now_ms) {
+                    next_fire_ms = base_fire;
+                } else {
+                    const uint64_t elapsed = now_ms - base_fire;
+                    const uint64_t skips = (elapsed / period) + 1u;
+                    next_fire_ms = base_fire + (skips * period);
                 }
             } else {
                 next_fire_ms = now_ms + record.period_ms;
@@ -64,5 +69,5 @@ void FSScheduler::step() {
         // One-shot (deferred): record falls out of scope, FSCallback destroyed.
     }
 
-    calculate_next_wakeup_time_ms(clock.now_ms());
+    calculate_next_wakeup_time_ms(now_ms);
 }
