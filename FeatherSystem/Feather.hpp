@@ -149,6 +149,10 @@ public:
     // as "budget" (4-bit, 0–15).
     // -----------------------------------------------------------------------
 
+	void step() {
+		scheduler.step();
+	}
+
     template<typename F>
     uint64_t add_instant_task(F&& task, uint8_t priority) {
         const uint64_t id = next_id++;
