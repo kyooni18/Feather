@@ -1,7 +1,9 @@
+## Explanation
+
 Feather is a utility Library, mainly for embedded environments.
 Starts from single-threaded scheduler, expanding to GUI and so on.
 
-Currently available modules:
+## Currently available modules:
 FSTime: Contains wrapper of time/clock functions. Used to track time flow with universal method.
 - now_ms must be uint64_t function.
 
@@ -11,7 +13,7 @@ FSScheduler: single-threaded, cooperative scheduler.
 - Individual IDs for Tasks. (uint64_t)
 - Does not engross entire running loop, being executed only if step() is called.
 
-Simple usage:
+## Simple usage:
 ``` C++
 // ... other codes..
 
