@@ -52,3 +52,7 @@ while(count < 5) {
 std::cout << "count: " << count << std::endl;
 
 ```
+
+## Future plans
+
+- some GUI stuffs for little more higher performance MCUs
