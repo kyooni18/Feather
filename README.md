@@ -39,7 +39,7 @@ feather.add_deffered_task([]()  {
 feather.add_periodic_task([=, &count]() {
 		count++;
 	}, //task,
-	1000, // starts after 1000 milliseconds after start
+	1000, // starts to be executed 1000 milliseconds after start
 	1000, // being executed with interval of 1000 milliseconds
 	1, // priority
 	FSSchedulerPeriodicTaskRepeatAllocationType::Absolute // being executed with exactly 1000 ms of interval even if task execution is delayed
