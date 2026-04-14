@@ -136,6 +136,8 @@ private:
     uint64_t next_wakeup_time = 0;
     uint64_t next_id          = 1;
 
+    void maybe_shrink_timed_heap();
+
 public:
 
     explicit FSScheduler(FSTime& clock_src);
