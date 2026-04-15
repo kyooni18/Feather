@@ -23,20 +23,20 @@ Feather feather([]() { return uint64_t(millis()); }); // Initializes Feather wit
 
 int count = 0;
 
-feather.add_instant_task([]() {
+feather.InstantTask([]() {
 		std::cout << "Feather Initialized.\n";
 	}, // task
 	1, // priority
 );
 
-feather.add_deffered_task([]()  {
+feather.DeferredTask([]()  {
 		std::cout << "loop started\n";
 	}, // task
 	1000, // executes 1000 milliseconds after start
 	1 // priority
 );
 
-feather.add_periodic_task([=, &count]() {
+feather.PeriodicTask([=, &count]() {
 		count++;
 	}, //task,
 	1000, // starts to be executed 1000 milliseconds after start
