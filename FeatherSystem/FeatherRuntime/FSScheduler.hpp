@@ -138,7 +138,7 @@ private:
     // -----------------------------------------------------------------------
     // Ready queues (0..15 budget levels):
     // - due timed tasks and instant tasks are enqueued here
-    // - selection uses per-task credit (deficit style round refill)
+    // - selection uses per-class credit (deficit style round refill)
     // -----------------------------------------------------------------------
     struct ReadyTaskRecord {
         FSCallback task;

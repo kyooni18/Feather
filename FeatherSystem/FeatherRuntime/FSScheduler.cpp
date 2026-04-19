@@ -36,7 +36,7 @@ int FSScheduler::highest_ready_budget_with_credit() {
 void FSScheduler::refill_ready_credits() {
     for (int budget = 0; budget <= 15; ++budget) {
         if ((ready_bitmap & static_cast<uint16_t>(1u << budget)) != 0) {
-            class_credit[static_cast<size_t>(budget)] = static_cast<uint8_t>(budget & 0x0F);
+            class_credit[static_cast<size_t>(budget)] = static_cast<uint8_t>(budget);
         }
     }
 }
@@ -52,9 +52,9 @@ bool FSScheduler::pop_next_ready_task(ReadyTaskRecord& out) {
         budget = highest_ready_budget_with_credit();
     }
 
-    // Fallback path for runnable classes that intentionally have zero round credit
-    // (e.g. budget class 0). This keeps those tasks runnable when no positive-credit
-    // class is selectable.
+    // Fallback path intentionally re-scans runnable classes without credit filtering.
+    // This allows classes with zero configured round credit (e.g. budget class 0)
+    // to still make progress when no positive-credit class is currently selectable.
     if (budget < 0 && ready_bitmap != 0) {
         for (int i = 15; i >= 0; --i) {
             if ((ready_bitmap & static_cast<uint16_t>(1u << i)) != 0) {
