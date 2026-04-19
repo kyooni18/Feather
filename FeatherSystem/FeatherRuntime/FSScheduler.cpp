@@ -52,6 +52,9 @@ bool FSScheduler::pop_next_ready_task(ReadyTaskRecord& out) {
         budget = highest_ready_budget_with_credit();
     }
 
+    // Fallback path for runnable classes that intentionally have zero round credit
+    // (e.g. budget class 0). This keeps those tasks runnable when no positive-credit
+    // class is selectable.
     if (budget < 0 && ready_bitmap != 0) {
         for (int i = 15; i >= 0; --i) {
             if ((ready_bitmap & static_cast<uint16_t>(1u << i)) != 0) {
@@ -140,7 +143,7 @@ void FSScheduler::step() {
         });
     }
 
-    for (uint32_t dispatched = 0; dispatched < max_dispatch_per_step; ++dispatched) {
+    for (uint32_t dispatched = 0; dispatched < MAX_DISPATCH_PER_STEP; ++dispatched) {
         ReadyTaskRecord selected;
         if (!pop_next_ready_task(selected)) {
             break;

@@ -153,7 +153,7 @@ private:
     std::array<std::deque<ReadyTaskRecord>, 16> ready_queues{};
     std::array<uint8_t, 16> class_credit{};
     uint16_t ready_bitmap = 0;
-    static constexpr uint32_t max_dispatch_per_step = 1;
+    static constexpr uint32_t MAX_DISPATCH_PER_STEP = 1;
 
     uint64_t next_wakeup_time = 0;
     uint64_t next_id          = 1;
