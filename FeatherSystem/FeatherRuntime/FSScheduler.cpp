@@ -12,7 +12,7 @@ FSScheduler::FSScheduler(FSTime& clock_src)
 }
 
 void FSScheduler::enqueue_ready_task(ReadyTaskRecord&& record) {
-    const uint8_t queue_index = static_cast<uint8_t>(record.base_budget & 0x0F);
+    const uint8_t queue_index = record.base_budget;
     ready_queues[queue_index].push_back(std::move(record));
     ready_bitmap |= static_cast<uint16_t>(1u << queue_index);
 }
@@ -168,7 +168,7 @@ void FSScheduler::step() {
             timed_heap.push(TimedTaskRecord{
                 next_fire_ms,
                 std::move(selected.task),
-                static_cast<uint8_t>(selected.base_budget & 0x0F),
+                selected.base_budget,
                 selected.period_ms,
                 selected.id,
                 selected.repeat_type
