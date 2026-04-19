@@ -24,7 +24,7 @@ bool FSScheduler::has_ready_tasks() const {
 
 int FSScheduler::next_ready_budget_with_credit() {
     for (int offset = 1; offset <= 16; ++offset) {
-        const int budget = static_cast<int>((static_cast<int>(rr_cursor) + offset) & 0x0F);
+        const int budget = (static_cast<int>(rr_cursor) + offset) % 16;
         if ((ready_bitmap & static_cast<uint16_t>(1u << budget)) == 0) {
             continue;
         }
@@ -63,10 +63,7 @@ bool FSScheduler::pop_next_ready_task(ReadyTaskRecord& out) {
     auto& queue = ready_queues[static_cast<size_t>(budget)];
     out = std::move(queue.front());
     queue.pop_front();
-    if (class_credit[static_cast<size_t>(budget)] > 0) {
-        class_credit[static_cast<size_t>(budget)] =
-            static_cast<uint8_t>(class_credit[static_cast<size_t>(budget)] - 1u);
-    }
+    --class_credit[static_cast<size_t>(budget)];
     rr_cursor = static_cast<uint8_t>(budget);
     if (queue.empty()) {
         ready_bitmap &= static_cast<uint16_t>(~(1u << budget));

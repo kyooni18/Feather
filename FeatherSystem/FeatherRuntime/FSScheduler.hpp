@@ -160,7 +160,7 @@ private:
     std::array<std::deque<ReadyTaskRecord>, 16> ready_queues{};
     std::array<uint8_t, 16> class_credit{};
     uint16_t ready_bitmap = 0;
-    uint8_t  rr_cursor    = 0;  // last-dispatched budget class; cyclic search starts here+1
+    uint8_t  rr_cursor    = 0;  // last-dispatched budget class; next search begins at (rr_cursor+1) % 16
     // Dispatch count per step(). Keep 1 for compatibility; increase to reduce burst latency.
     static constexpr uint32_t DISPATCH_PER_STEP = 1;
 
