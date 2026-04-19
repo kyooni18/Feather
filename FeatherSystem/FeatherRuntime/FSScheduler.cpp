@@ -39,9 +39,9 @@ void FSScheduler::step() {
         if (instant_rr_cursor >= instant_task_records.size()) {
             instant_rr_cursor = 0;
         }
-        InstantTaskRecord rec = std::move(instant_task_records[instant_rr_cursor]);
-        instant_task_records.erase(instant_task_records.begin() + instant_rr_cursor);
+        auto& rec = instant_task_records[instant_rr_cursor];
         if (rec.task) rec.task();
+        instant_task_records.erase(instant_task_records.begin() + instant_rr_cursor);
         if (instant_task_records.empty() || instant_rr_cursor >= instant_task_records.size()) {
             instant_rr_cursor = 0;
         }
