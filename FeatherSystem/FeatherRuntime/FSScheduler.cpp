@@ -25,11 +25,13 @@ int FSScheduler::highest_ready_budget_with_credit() {
         auto& queue = ready_queues[static_cast<size_t>(budget)];
         const size_t queue_size = queue.size();
         for (size_t i = 0; i < queue_size; ++i) {
-            if (queue.front().credit > 0) {
+            ReadyTaskRecord current = std::move(queue.front());
+            queue.pop_front();
+            if (current.credit > 0) {
+                queue.push_front(std::move(current));
                 return budget;
             }
-            queue.push_back(std::move(queue.front()));
-            queue.pop_front();
+            queue.push_back(std::move(current));
         }
     }
     return -1;
@@ -54,9 +56,9 @@ bool FSScheduler::pop_next_ready_task(ReadyTaskRecord& out) {
         budget = highest_ready_budget_with_credit();
     }
 
-    if (budget < 0) {
+    if (budget < 0 && ready_bitmap != 0) {
         for (int i = 15; i >= 0; --i) {
-            if (!ready_queues[static_cast<size_t>(i)].empty()) {
+            if ((ready_bitmap & static_cast<uint16_t>(1u << i)) != 0) {
                 budget = i;
                 break;
             }
@@ -70,6 +72,9 @@ bool FSScheduler::pop_next_ready_task(ReadyTaskRecord& out) {
     auto& queue = ready_queues[static_cast<size_t>(budget)];
     out = std::move(queue.front());
     queue.pop_front();
+    if (out.credit > 0) {
+        out.credit = static_cast<uint8_t>(out.credit - 1u);
+    }
     if (queue.empty()) {
         ready_bitmap &= static_cast<uint16_t>(~(1u << budget));
     }
@@ -111,10 +116,11 @@ void FSScheduler::step() {
     while (!instant_task_records.empty()) {
         InstantTaskRecord record = std::move(instant_task_records.front());
         instant_task_records.pop_front();
+        const uint8_t budget_value = static_cast<uint8_t>(record.budget & 0x0F);
         enqueue_ready_task(ReadyTaskRecord{
             std::move(record.task),
-            static_cast<uint8_t>(record.budget & 0x0F),
-            static_cast<uint8_t>(record.budget & 0x0F),
+            budget_value,
+            budget_value,
             0u,
             0u,
             record.id,
@@ -126,10 +132,11 @@ void FSScheduler::step() {
         TimedTaskRecord record =
             std::move(const_cast<TimedTaskRecord&>(timed_heap.top()));
         timed_heap.pop();
+        const uint8_t budget_value = static_cast<uint8_t>(record.budget & 0x0F);
         enqueue_ready_task(ReadyTaskRecord{
             std::move(record.task),
-            static_cast<uint8_t>(record.budget & 0x0F),
-            static_cast<uint8_t>(record.budget & 0x0F),
+            budget_value,
+            budget_value,
             record.period_ms,
             record.next_fire_ms,
             record.id,
@@ -140,10 +147,6 @@ void FSScheduler::step() {
     ReadyTaskRecord selected;
     if (pop_next_ready_task(selected)) {
         if (selected.task) selected.task();
-
-        if (selected.credit > 0) {
-            selected.credit = static_cast<uint8_t>(selected.credit - 1u);
-        }
 
         if (selected.period_ms != 0) {
             uint64_t next_fire_ms;
