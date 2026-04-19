@@ -7,6 +7,7 @@ FSScheduler::FSScheduler(FSTime& clock_src)
     , ready_queues{}
     , class_credit{}
     , ready_bitmap{0}
+    , rr_cursor{0}
     , next_wakeup_time{0}
     , next_id{1} {
 }
@@ -21,14 +22,16 @@ bool FSScheduler::has_ready_tasks() const {
     return ready_bitmap != 0;
 }
 
-int FSScheduler::highest_ready_budget_with_credit() {
-    for (int budget = 15; budget >= 0; --budget) {
+int FSScheduler::next_ready_budget_with_credit() {
+    for (int offset = 1; offset <= 16; ++offset) {
+        const int budget = static_cast<int>((static_cast<int>(rr_cursor) + offset) & 0x0F);
         if ((ready_bitmap & static_cast<uint16_t>(1u << budget)) == 0) {
             continue;
         }
-        if (class_credit[static_cast<size_t>(budget)] > 0) {
-            return budget;
+        if (class_credit[static_cast<size_t>(budget)] == 0) {
+            continue;
         }
+        return budget;
     }
     return -1;
 }
@@ -36,7 +39,8 @@ int FSScheduler::highest_ready_budget_with_credit() {
 void FSScheduler::refill_ready_credits() {
     for (int budget = 0; budget <= 15; ++budget) {
         if ((ready_bitmap & static_cast<uint16_t>(1u << budget)) != 0) {
-            class_credit[static_cast<size_t>(budget)] = static_cast<uint8_t>(budget);
+            class_credit[static_cast<size_t>(budget)] =
+                static_cast<uint8_t>(budget == 0 ? 1 : budget);
         }
     }
 }
@@ -46,22 +50,10 @@ bool FSScheduler::pop_next_ready_task(ReadyTaskRecord& out) {
         return false;
     }
 
-    int budget = highest_ready_budget_with_credit();
+    int budget = next_ready_budget_with_credit();
     if (budget < 0) {
         refill_ready_credits();
-        budget = highest_ready_budget_with_credit();
-    }
-
-    // Fallback path intentionally re-scans runnable classes without credit filtering.
-    // This allows classes with zero configured round credit (e.g. budget class 0)
-    // to still make progress when no positive-credit class is currently selectable.
-    if (budget < 0 && ready_bitmap != 0) {
-        for (int i = 15; i >= 0; --i) {
-            if ((ready_bitmap & static_cast<uint16_t>(1u << i)) != 0) {
-                budget = i;
-                break;
-            }
-        }
+        budget = next_ready_budget_with_credit();
     }
 
     if (budget < 0) {
@@ -75,6 +67,7 @@ bool FSScheduler::pop_next_ready_task(ReadyTaskRecord& out) {
         class_credit[static_cast<size_t>(budget)] =
             static_cast<uint8_t>(class_credit[static_cast<size_t>(budget)] - 1u);
     }
+    rr_cursor = static_cast<uint8_t>(budget);
     if (queue.empty()) {
         ready_bitmap &= static_cast<uint16_t>(~(1u << budget));
         class_credit[static_cast<size_t>(budget)] = 0;

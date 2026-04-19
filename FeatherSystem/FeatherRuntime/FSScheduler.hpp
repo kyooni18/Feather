@@ -31,6 +31,13 @@ static inline uint8_t fs_budget_low(uint8_t packed) {
     return static_cast<uint8_t>(packed & 0x0F);
 }
 
+// Clamps a raw user-supplied priority into the valid 1–15 execution range.
+// Budget 0 is mapped to 1 so every class has at least one credit per round.
+static inline uint8_t normalize_budget(uint8_t p) {
+    p &= 0x0F;
+    return p == 0 ? static_cast<uint8_t>(1) : p;
+}
+
 enum FSSchedulerPeriodicTaskRepeatAllocationType {
     Relative,
     Absolute
@@ -153,6 +160,7 @@ private:
     std::array<std::deque<ReadyTaskRecord>, 16> ready_queues{};
     std::array<uint8_t, 16> class_credit{};
     uint16_t ready_bitmap = 0;
+    uint8_t  rr_cursor    = 0;  // last-dispatched budget class; cyclic search starts here+1
     // Dispatch count per step(). Keep 1 for compatibility; increase to reduce burst latency.
     static constexpr uint32_t DISPATCH_PER_STEP = 1;
 
@@ -162,7 +170,7 @@ private:
     void maybe_shrink_timed_heap();
     void enqueue_ready_task(ReadyTaskRecord&& record);
     bool has_ready_tasks() const;
-    int  highest_ready_budget_with_credit();
+    int  next_ready_budget_with_credit();
     void refill_ready_credits();
     bool pop_next_ready_task(ReadyTaskRecord& out);
 
@@ -185,7 +193,7 @@ public:
         instant_task_records.push_back(
             InstantTaskRecord{
                 FSCallback(std::forward<F>(task)),
-                static_cast<uint8_t>(priority & 0x0F),
+                normalize_budget(priority),
                 id
             }
         );
@@ -198,7 +206,7 @@ public:
         TimedTaskRecord rec{
             timestamp_ms,
             FSCallback(std::forward<F>(task)),
-            static_cast<uint8_t>(priority & 0x0F),
+            normalize_budget(priority),
             0u,
             id,
             FSSchedulerPeriodicTaskRepeatAllocationType::Absolute
@@ -220,7 +228,7 @@ public:
         TimedTaskRecord rec{
             start_timestamp_ms,
             FSCallback(std::forward<F>(task)),
-            static_cast<uint8_t>(priority & 0x0F),
+            normalize_budget(priority),
             period_ms,
             id,
             allocation_type
