@@ -153,8 +153,8 @@ private:
     std::array<std::deque<ReadyTaskRecord>, 16> ready_queues{};
     std::array<uint8_t, 16> class_credit{};
     uint16_t ready_bitmap = 0;
-    // Dispatch quota per step(). Keep 1 for compatibility; increase to reduce burst latency.
-    static constexpr uint32_t MAX_DISPATCH_PER_STEP = 1;
+    // Dispatch count per step(). Keep 1 for compatibility; increase to reduce burst latency.
+    static constexpr uint32_t DISPATCH_PER_STEP = 1;
 
     uint64_t next_wakeup_time = 0;
     uint64_t next_id          = 1;

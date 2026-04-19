@@ -117,7 +117,7 @@ void FSScheduler::step() {
     while (!instant_task_records.empty()) {
         InstantTaskRecord record = std::move(instant_task_records.front());
         instant_task_records.pop_front();
-        const uint8_t budget_value = static_cast<uint8_t>(record.budget & 0x0F);
+        const uint8_t budget_value = record.budget;
         enqueue_ready_task(ReadyTaskRecord{
             std::move(record.task),
             budget_value,
@@ -132,7 +132,7 @@ void FSScheduler::step() {
         TimedTaskRecord record =
             std::move(const_cast<TimedTaskRecord&>(timed_heap.top()));
         timed_heap.pop();
-        const uint8_t budget_value = static_cast<uint8_t>(record.budget & 0x0F);
+        const uint8_t budget_value = record.budget;
         enqueue_ready_task(ReadyTaskRecord{
             std::move(record.task),
             budget_value,
@@ -143,7 +143,7 @@ void FSScheduler::step() {
         });
     }
 
-    for (uint32_t dispatched = 0; dispatched < MAX_DISPATCH_PER_STEP; ++dispatched) {
+    for (uint32_t dispatched = 0; dispatched < DISPATCH_PER_STEP; ++dispatched) {
         ReadyTaskRecord selected;
         if (!pop_next_ready_task(selected)) {
             break;
