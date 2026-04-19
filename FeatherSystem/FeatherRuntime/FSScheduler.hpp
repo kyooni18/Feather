@@ -2,6 +2,9 @@
 #define FEATHER_FSSCHEDULER_H
 
 #include <cstdint>
+#include <array>
+#include <deque>
+#include <limits>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -95,9 +98,8 @@ private:
     FSTime clock;
 
     // -----------------------------------------------------------------------
-    // Instant tasks — stored once in a flat vector; executed by a simple
-    // round-robin cursor directly on the original records.
-    // No expansion arrays, no rebuild phase, no weighted-RR overhead.
+    // Instant tasks — pending one-shot callbacks waiting to become runnable.
+    // They are moved into budget-indexed ready queues on step().
     // -----------------------------------------------------------------------
     struct InstantTaskRecord {
         FSCallback task;
@@ -105,11 +107,11 @@ private:
         uint64_t   id     = 0;
     };
 
-    std::vector<InstantTaskRecord> instant_task_records;
-    size_t instant_rr_cursor = 0;
+    std::deque<InstantTaskRecord> instant_task_records;
 
     // -----------------------------------------------------------------------
     // Timed tasks — single min-heap keyed on next_fire_ms.
+    // Holds only not-yet-due tasks.
     //   period_ms == 0  →  one-shot deferred task
     //   period_ms  > 0  →  periodic task
     // -----------------------------------------------------------------------
@@ -133,10 +135,34 @@ private:
                         std::vector<TimedTaskRecord>,
                         TimedTaskCmp> timed_heap;
 
+    // -----------------------------------------------------------------------
+    // Ready queues (0..15 budget levels):
+    // - due timed tasks and instant tasks are enqueued here
+    // - selection uses per-task credit (deficit style round refill)
+    // -----------------------------------------------------------------------
+    struct ReadyTaskRecord {
+        FSCallback task;
+        uint8_t    base_budget  = 0;  // user-provided fixed budget (0-15)
+        uint8_t    credit       = 0;  // remaining execution opportunities in round
+        uint32_t   period_ms    = 0;  // 0 for one-shot, >0 for periodic
+        uint64_t   next_fire_ms = 0;  // used only when period_ms > 0
+        uint64_t   id           = 0;
+        FSSchedulerPeriodicTaskRepeatAllocationType repeat_type =
+            FSSchedulerPeriodicTaskRepeatAllocationType::Absolute;
+    };
+
+    std::array<std::deque<ReadyTaskRecord>, 16> ready_queues{};
+    uint16_t ready_bitmap = 0;
+
     uint64_t next_wakeup_time = 0;
     uint64_t next_id          = 1;
 
     void maybe_shrink_timed_heap();
+    void enqueue_ready_task(ReadyTaskRecord&& record);
+    bool has_ready_tasks() const;
+    int  highest_ready_budget_with_credit();
+    void refill_ready_credits();
+    bool pop_next_ready_task(ReadyTaskRecord& out);
 
 public:
 
