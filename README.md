@@ -10,9 +10,10 @@ FSTime: Contains wrapper of time/clock functions. Used to track time flow with u
 FSScheduler: single-threaded, cooperative scheduler.
 - Supports running tasks needed to be executed at certain time, or executed regularly.
 - Budget/cycle system based on tasks' priority. (0~15, packed into 8bit int)
-- Budget controls runnable selection frequency (higher budget gets more execution opportunities per round).
+- Budget controls runnable selection opportunities per class-credit round (higher budget gets more execution opportunities per round).
 - Individual IDs for Tasks. (uint64_t)
 - Does not engross entire running loop, being executed only if step() is called.
+- Per-step dispatch throughput is bounded by an internal scheduler policy value.
 
 ## Simple usage:
 ``` C++

@@ -143,7 +143,6 @@ private:
     struct ReadyTaskRecord {
         FSCallback task;
         uint8_t    base_budget  = 0;  // user-provided fixed budget (0-15)
-        uint8_t    credit       = 0;  // remaining execution opportunities in round
         uint32_t   period_ms    = 0;  // 0 for one-shot, >0 for periodic
         uint64_t   next_fire_ms = 0;  // used only when period_ms > 0
         uint64_t   id           = 0;
@@ -152,7 +151,9 @@ private:
     };
 
     std::array<std::deque<ReadyTaskRecord>, 16> ready_queues{};
+    std::array<uint8_t, 16> class_credit{};
     uint16_t ready_bitmap = 0;
+    static constexpr uint32_t max_dispatch_per_step = 1;
 
     uint64_t next_wakeup_time = 0;
     uint64_t next_id          = 1;
