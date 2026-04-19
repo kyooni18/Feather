@@ -41,7 +41,10 @@ void FSScheduler::step() {
         }
         auto& rec = instant_task_records[instant_rr_cursor];
         if (rec.task) rec.task();
-        instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
+        instant_task_records.erase(instant_task_records.begin() + instant_rr_cursor);
+        if (instant_task_records.empty() || instant_rr_cursor >= instant_task_records.size()) {
+            instant_rr_cursor = 0;
+        }
     }
 
     while (!timed_heap.empty() && timed_heap.top().next_fire_ms <= now_ms) {
