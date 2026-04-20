@@ -77,7 +77,7 @@ public:
     }
 
     template<typename Trigger, typename Condition, typename Action>
-    size_t Event(
+    FSEventHandle Event(
         Trigger&&   trigger,
         Condition&& condition,
         Action&&    action,
@@ -93,15 +93,26 @@ public:
         );
     }
 
-    bool StartEvent(size_t event_id) {
+    template<typename Trigger, typename Action>
+    FSEventHandle Event(Trigger&& trigger, Action&& action, bool enabled = true) {
+        return events.add_event(
+            FSEvent::make(
+                std::forward<Trigger>(trigger),
+                std::forward<Action>(action),
+                enabled
+            )
+        );
+    }
+
+    bool StartEvent(FSEventHandle event_id) {
         return events.start_event(event_id);
     }
 
-    bool StopEvent(size_t event_id) {
+    bool StopEvent(FSEventHandle event_id) {
         return events.stop_event(event_id);
     }
 
-    bool DeleteEvent(size_t event_id) {
+    bool DeleteEvent(FSEventHandle event_id) {
         return events.delete_event(event_id);
     }
 };
