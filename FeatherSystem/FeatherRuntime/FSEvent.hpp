@@ -294,6 +294,7 @@ public:
     }
 
     size_t size() const {
+        // Number of non-deleted events (includes both enabled and stopped events).
         return active_event_count;
     }
 };
