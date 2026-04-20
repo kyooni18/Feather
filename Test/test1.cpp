@@ -15,7 +15,10 @@ int main() {
     int periodic_count = 0;
     int deferred_count = 0;
     int manual_ready_count = 0;
+    int manual_action_count = 0;
     int timed_ready_count = 0;
+    int timed_action_count = 0;
+    uint64_t timed_event_next_check_ms = 95;
 
     const uint64_t periodic_id = feather.PeriodicTask(
         [&periodic_count]() { ++periodic_count; },
@@ -101,45 +104,40 @@ int main() {
         return 1;
     }
 
-    struct ManualEventContext {
-        bool pending = false;
-        bool condition_met = false;
-        int action_count = 0;
-    };
+    bool manual_pending = false;
+    bool manual_condition_met = false;
 
-    const auto manual_event_index = feather.events.add_event(
-        FSEvent::make(
-            ManualEventContext{},
-            [](ManualEventContext& ctx, uint64_t) {
-                return ctx.pending;
-            },
-            [](ManualEventContext& ctx, uint64_t) {
-                return ctx.condition_met;
-            },
-            [&manual_ready_count](ManualEventContext& ctx, FSScheduler& scheduler, uint64_t) {
-                ctx.pending = false;
-                ctx.condition_met = false;
-                ++ctx.action_count;
-                scheduler.enqueue_ready_task(
-                    [&manual_ready_count]() { ++manual_ready_count; },
-                    1
-                );
-            }
-        )
+    const auto manual_event_index = feather.Event(
+        [&manual_pending](uint64_t) {
+            return manual_pending;
+        },
+        [&manual_condition_met](uint64_t) {
+            return manual_condition_met;
+        },
+        [&manual_pending, &manual_condition_met, &manual_action_count, &manual_ready_count](
+            FSScheduler& scheduler,
+            uint64_t
+        ) {
+            manual_pending = false;
+            manual_condition_met = false;
+            ++manual_action_count;
+            scheduler.enqueue_ready_task(
+                [&manual_ready_count]() { ++manual_ready_count; },
+                1
+            );
+        }
     );
 
-    auto* manual_event = feather.events.event_at(manual_event_index);
-    if (manual_event == nullptr) {
-        std::cerr << "failed to retrieve manual event\n";
+    if (!feather.StopEvent(manual_event_index)) {
+        std::cerr << "failed to stop manual event\n";
         return 1;
     }
-    auto* manual_context = manual_event->context_as<ManualEventContext>();
-    if (manual_context == nullptr) {
-        std::cerr << "failed to retrieve manual event context\n";
+    if (!feather.StartEvent(manual_event_index)) {
+        std::cerr << "failed to start manual event\n";
         return 1;
     }
 
-    manual_context->pending = true;
+    manual_pending = true;
     if (feather.events.poll_all() != 0) {
         std::cerr << "manual event should not dispatch without condition\n";
         return 1;
@@ -149,7 +147,7 @@ int main() {
         return 1;
     }
 
-    manual_context->condition_met = true;
+    manual_condition_met = true;
     if (feather.events.poll_all() != 1) {
         std::cerr << "manual event should dispatch once when condition matches\n";
         return 1;
@@ -169,44 +167,44 @@ int main() {
         std::cerr << "manual event ready work did not execute\n";
         return 1;
     }
-    if (manual_context->action_count != 1) {
+    if (manual_action_count != 1) {
         std::cerr << "manual event action count mismatch\n";
         return 1;
     }
 
-    struct TimedEventContext {
-        uint64_t next_check_ms = 0;
-        int action_count = 0;
-    };
-
-    const auto timed_event_index = feather.events.add_event(
-        FSEvent::make(
-            TimedEventContext{95, 0},
-            [](TimedEventContext& ctx, uint64_t now_ms) {
-                return now_ms >= ctx.next_check_ms;
-            },
-            [](TimedEventContext&, uint64_t) {
-                return true;
-            },
-            [&timed_ready_count](TimedEventContext& ctx, FSScheduler& scheduler, uint64_t now_ms) {
-                ++ctx.action_count;
-                ctx.next_check_ms = now_ms + 20;
-                scheduler.enqueue_ready_task(
-                    [&timed_ready_count]() { ++timed_ready_count; },
-                    1
-                );
-            }
-        )
+    const auto timed_event_index = feather.Event(
+        [&timed_event_next_check_ms](uint64_t now_ms) {
+            return now_ms >= timed_event_next_check_ms;
+        },
+        [](uint64_t) {
+            return true;
+        },
+        [&timed_action_count, &timed_event_next_check_ms, &timed_ready_count](
+            FSScheduler& scheduler,
+            uint64_t now_ms
+        ) {
+            ++timed_action_count;
+            timed_event_next_check_ms = now_ms + 20;
+            scheduler.enqueue_ready_task(
+                [&timed_ready_count]() { ++timed_ready_count; },
+                1
+            );
+        }
     );
 
-    auto* timed_event = feather.events.event_at(timed_event_index);
-    if (timed_event == nullptr) {
-        std::cerr << "failed to retrieve timed event\n";
+    if (!feather.StopEvent(timed_event_index)) {
+        std::cerr << "failed to stop timed event\n";
         return 1;
     }
-    auto* timed_context = timed_event->context_as<TimedEventContext>();
-    if (timed_context == nullptr) {
-        std::cerr << "failed to retrieve timed event context\n";
+
+    fake_now_ms_value = 95;
+    if (feather.events.poll_all() != 0) {
+        std::cerr << "stopped timed event should not dispatch\n";
+        return 1;
+    }
+
+    if (!feather.StartEvent(timed_event_index)) {
+        std::cerr << "failed to start timed event\n";
         return 1;
     }
 
@@ -221,7 +219,7 @@ int main() {
         std::cerr << "timed event should dispatch at its scheduled time\n";
         return 1;
     }
-    if (timed_context->next_check_ms != 115) {
+    if (timed_event_next_check_ms != 115) {
         std::cerr << "timed event should update its next check time\n";
         return 1;
     }
@@ -239,6 +237,25 @@ int main() {
     fake_now_ms_value = 100;
     if (feather.events.poll_all() != 0) {
         std::cerr << "timed event should not re-dispatch before next check\n";
+        return 1;
+    }
+
+    manual_pending = true;
+    manual_condition_met = true;
+    if (!feather.DeleteEvent(manual_event_index)) {
+        std::cerr << "failed to delete manual event\n";
+        return 1;
+    }
+    if (feather.DeleteEvent(manual_event_index)) {
+        std::cerr << "deleted manual event should not be deleted twice\n";
+        return 1;
+    }
+    if (feather.events.poll_all() != 0) {
+        std::cerr << "deleted manual event should not dispatch\n";
+        return 1;
+    }
+    if (feather.StartEvent(manual_event_index)) {
+        std::cerr << "deleted manual event should not be restartable\n";
         return 1;
     }
 
