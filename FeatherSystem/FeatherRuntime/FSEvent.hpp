@@ -18,8 +18,6 @@ class FSEvent {
 private:
     struct Ops {
         void (*destroy_storage)(void*) = nullptr;
-        void* (*context_ptr)(void*) = nullptr;
-        const void* (*const_context_ptr)(const void*) = nullptr;
         bool (*trigger)(void*, uint64_t) = nullptr;
         bool (*condition)(void*, uint64_t) = nullptr;
         void (*action)(void*, FSScheduler&, uint64_t) = nullptr;
@@ -41,34 +39,31 @@ private:
 public:
     FSEvent() = default;
 
-    template<typename Context, typename Trigger, typename Condition, typename Action>
+    template<typename Trigger, typename Condition, typename Action>
     static FSEvent make(
-        Context&&   context,
         Trigger&&   trigger,
         Condition&& condition,
         Action&&    action,
         bool        enabled = true
     ) {
-        using StoredContext = std::decay_t<Context>;
         using StoredTrigger = std::decay_t<Trigger>;
         using StoredCondition = std::decay_t<Condition>;
         using StoredAction = std::decay_t<Action>;
 
         static_assert(
-            std::is_invocable_r_v<bool, StoredTrigger&, StoredContext&, uint64_t>,
-            "Trigger must be callable as bool(Context&, uint64_t)"
+            std::is_invocable_r_v<bool, StoredTrigger&, uint64_t>,
+            "Trigger must be callable as bool(uint64_t)"
         );
         static_assert(
-            std::is_invocable_r_v<bool, StoredCondition&, StoredContext&, uint64_t>,
-            "Condition must be callable as bool(Context&, uint64_t)"
+            std::is_invocable_r_v<bool, StoredCondition&, uint64_t>,
+            "Condition must be callable as bool(uint64_t)"
         );
         static_assert(
-            std::is_invocable_r_v<void, StoredAction&, StoredContext&, FSScheduler&, uint64_t>,
-            "Action must be callable as void(Context&, FSScheduler&, uint64_t)"
+            std::is_invocable_r_v<void, StoredAction&, FSScheduler&, uint64_t>,
+            "Action must be callable as void(FSScheduler&, uint64_t)"
         );
 
         struct Storage {
-            StoredContext context;
             StoredTrigger trigger;
             StoredCondition condition;
             StoredAction action;
@@ -80,28 +75,21 @@ public:
             [](void* ptr) {
                 delete static_cast<Storage*>(ptr);
             },
-            [](void* ptr) -> void* {
-                return &static_cast<Storage*>(ptr)->context;
-            },
-            [](const void* ptr) -> const void* {
-                return &static_cast<const Storage*>(ptr)->context;
+            [](void* ptr, uint64_t now_ms) -> bool {
+                auto* typed = static_cast<Storage*>(ptr);
+                return typed->trigger(now_ms);
             },
             [](void* ptr, uint64_t now_ms) -> bool {
                 auto* typed = static_cast<Storage*>(ptr);
-                return typed->trigger(typed->context, now_ms);
-            },
-            [](void* ptr, uint64_t now_ms) -> bool {
-                auto* typed = static_cast<Storage*>(ptr);
-                return typed->condition(typed->context, now_ms);
+                return typed->condition(now_ms);
             },
             [](void* ptr, FSScheduler& scheduler, uint64_t now_ms) {
                 auto* typed = static_cast<Storage*>(ptr);
-                typed->action(typed->context, scheduler, now_ms);
+                typed->action(scheduler, now_ms);
             }
         };
 
         auto* storage = new Storage{
-            std::forward<Context>(context),
             std::forward<Trigger>(trigger),
             std::forward<Condition>(condition),
             std::forward<Action>(action)
@@ -113,6 +101,22 @@ public:
         event.enabled_ = enabled;
         return event;
     }
+
+    template<typename Trigger, typename Condition, typename Action>
+    FSEvent(
+        Trigger&&   trigger,
+        Condition&& condition,
+        Action&&    action,
+        bool        enabled = true
+    )
+        : FSEvent(
+              make(
+                  std::forward<Trigger>(trigger),
+                  std::forward<Condition>(condition),
+                  std::forward<Action>(action),
+                  enabled
+              )
+          ) {}
 
     ~FSEvent() {
         reset();
@@ -152,22 +156,6 @@ public:
         enabled_ = enabled;
     }
 
-    template<typename Context>
-    Context* context_as() {
-        if (storage_ == nullptr || ops_ == nullptr || ops_->context_ptr == nullptr) {
-            return nullptr;
-        }
-        return static_cast<Context*>(ops_->context_ptr(storage_));
-    }
-
-    template<typename Context>
-    const Context* context_as() const {
-        if (storage_ == nullptr || ops_ == nullptr || ops_->const_context_ptr == nullptr) {
-            return nullptr;
-        }
-        return static_cast<const Context*>(ops_->const_context_ptr(storage_));
-    }
-
     FSEventPollResult poll(FSScheduler& scheduler, uint64_t now_ms) {
         FSEventPollResult result;
         if (!enabled_ || storage_ == nullptr || ops_ == nullptr ||
@@ -194,42 +182,91 @@ public:
 
 class FSEvents {
 private:
+    struct EventSlot {
+        bool occupied = false;
+        FSEvent event{};
+    };
+
     FSScheduler* scheduler = nullptr;
-    std::vector<FSEvent> events;
+    std::vector<EventSlot> events;
+    std::vector<size_t> free_indices;
+    size_t active_event_count = 0;
 
 public:
     explicit FSEvents(FSScheduler* schedsrc = nullptr)
         : scheduler(schedsrc)
-        , events{} {}
+        , events{}
+        , free_indices{}
+        , active_event_count(0) {}
 
     void bind(FSScheduler* schedsrc) {
         scheduler = schedsrc;
     }
 
     size_t add_event(FSEvent event) {
-        events.push_back(std::move(event));
-        return events.size() - 1;
+        size_t index;
+        if (!free_indices.empty()) {
+            index = free_indices.back();
+            free_indices.pop_back();
+            events[index].event = std::move(event);
+            events[index].occupied = true;
+        } else {
+            events.push_back(EventSlot{true, std::move(event)});
+            index = events.size() - 1;
+        }
+        ++active_event_count;
+        return index;
     }
 
     FSEvent* event_at(size_t index) {
-        if (index >= events.size()) {
+        if (index >= events.size() || !events[index].occupied) {
             return nullptr;
         }
-        return &events[index];
+        return &events[index].event;
     }
 
     const FSEvent* event_at(size_t index) const {
-        if (index >= events.size()) {
+        if (index >= events.size() || !events[index].occupied) {
             return nullptr;
         }
-        return &events[index];
+        return &events[index].event;
+    }
+
+    bool start_event(size_t index) {
+        auto* event = event_at(index);
+        if (event == nullptr) {
+            return false;
+        }
+        event->set_enabled(true);
+        return true;
+    }
+
+    bool stop_event(size_t index) {
+        auto* event = event_at(index);
+        if (event == nullptr) {
+            return false;
+        }
+        event->set_enabled(false);
+        return true;
+    }
+
+    bool delete_event(size_t index) {
+        if (index >= events.size() || !events[index].occupied) {
+            return false;
+        }
+
+        events[index].event = FSEvent{};
+        events[index].occupied = false;
+        free_indices.push_back(index);
+        --active_event_count;
+        return true;
     }
 
     bool poll_event(size_t index, uint64_t now_ms) {
-        if (scheduler == nullptr || index >= events.size()) {
+        if (scheduler == nullptr || index >= events.size() || !events[index].occupied) {
             return false;
         }
-        return events[index].poll(*scheduler, now_ms).action_dispatched;
+        return events[index].event.poll(*scheduler, now_ms).action_dispatched;
     }
 
     size_t poll_all(uint64_t now_ms) {
@@ -238,8 +275,11 @@ public:
         }
 
         size_t dispatched = 0;
-        for (auto& event : events) {
-            if (event.poll(*scheduler, now_ms).action_dispatched) {
+        for (auto& slot : events) {
+            if (!slot.occupied) {
+                continue;
+            }
+            if (slot.event.poll(*scheduler, now_ms).action_dispatched) {
                 ++dispatched;
             }
         }
@@ -254,6 +294,6 @@ public:
     }
 
     size_t size() const {
-        return events.size();
+        return active_event_count;
     }
 };

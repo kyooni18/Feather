@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <utility>
+
 #include "FeatherRuntime/FSTime.hpp"
 #include "FeatherRuntime/FSScheduler.hpp"
 #include "FeatherRuntime/FSEvent.hpp"
@@ -71,5 +74,34 @@ public:
     ) {
         return scheduler.add_periodic_task(
             std::forward<F>(task), time_to_run, repeat_cycle, priority, allocation_type);
+    }
+
+    template<typename Trigger, typename Condition, typename Action>
+    size_t Event(
+        Trigger&&   trigger,
+        Condition&& condition,
+        Action&&    action,
+        bool        enabled = true
+    ) {
+        return events.add_event(
+            FSEvent::make(
+                std::forward<Trigger>(trigger),
+                std::forward<Condition>(condition),
+                std::forward<Action>(action),
+                enabled
+            )
+        );
+    }
+
+    bool StartEvent(size_t event_id) {
+        return events.start_event(event_id);
+    }
+
+    bool StopEvent(size_t event_id) {
+        return events.stop_event(event_id);
+    }
+
+    bool DeleteEvent(size_t event_id) {
+        return events.delete_event(event_id);
     }
 };
