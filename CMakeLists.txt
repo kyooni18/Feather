@@ -61,6 +61,7 @@ install(FILES FeatherSystem/Feather.hpp
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/Feather
 )
 install(FILES
+  FeatherSystem/FeatherRuntime/FSEvent.hpp
   FeatherSystem/FeatherRuntime/FSScheduler.hpp
   FeatherSystem/FeatherRuntime/FSTime.hpp
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/Feather/FeatherRuntime

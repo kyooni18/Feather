@@ -2,6 +2,7 @@
 #define FEATHER_FSSCHEDULER_H
 
 #include <cstdint>
+#include <unordered_map>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -95,6 +96,17 @@ private:
     FSTime clock;
 
     // -----------------------------------------------------------------------
+    // Ready queue — one-shot work scheduled by events or other runtime hooks.
+    // Tasks are queued FIFO and executed on subsequent scheduler steps.
+    // -----------------------------------------------------------------------
+    struct ReadyTaskRecord {
+        FSCallback task;
+        uint8_t    budget = 0;
+    };
+
+    std::queue<ReadyTaskRecord> ready_task_queue;
+
+    // -----------------------------------------------------------------------
     // Instant tasks — stored once in a flat vector; executed by a simple
     // round-robin cursor directly on the original records.
     // No expansion arrays, no rebuild phase, no weighted-RR overhead.
@@ -129,18 +141,30 @@ private:
         }
     };
 
+    struct TimedTaskState {
+        bool enabled     = true;
+        bool cancelled   = false;
+        bool is_periodic = false;
+    };
+
     std::priority_queue<TimedTaskRecord,
                         std::vector<TimedTaskRecord>,
                         TimedTaskCmp> timed_heap;
+    std::unordered_map<uint64_t, TimedTaskState> timed_task_states;
 
     uint64_t next_wakeup_time = 0;
     uint64_t next_id          = 1;
 
     void maybe_shrink_timed_heap();
+    void prune_cancelled_timed_tasks();
 
 public:
 
     explicit FSScheduler(FSTime& clock_src);
+
+    uint64_t now_ms() {
+        return clock.now_ms();
+    }
 
     // -----------------------------------------------------------------------
     // Template API
@@ -150,6 +174,16 @@ public:
     // FSCallback. The external name is "priority"; internally it is stored
     // as "budget" (4-bit, 0–15).
     // -----------------------------------------------------------------------
+
+    template<typename F>
+    void enqueue_ready_task(F&& task, uint8_t priority) {
+        ready_task_queue.push(
+            ReadyTaskRecord{
+                FSCallback(std::forward<F>(task)),
+                static_cast<uint8_t>(priority & 0x0F)
+            }
+        );
+    }
 
     template<typename F>
     uint64_t add_instant_task(F&& task, uint8_t priority) {
@@ -176,6 +210,7 @@ public:
             FSSchedulerPeriodicTaskRepeatAllocationType::Absolute
         };
         timed_heap.push(std::move(rec));
+        timed_task_states.emplace(id, TimedTaskState{true, false, false});
         return id;
     }
 
@@ -198,11 +233,16 @@ public:
             allocation_type
         };
         timed_heap.push(std::move(rec));
+        timed_task_states.emplace(id, TimedTaskState{true, false, true});
         return id;
     }
 
     uint64_t calculate_next_wakeup_time_ms(uint64_t now_ms);
     uint64_t get_next_wakeup_time_ms() const;
+    bool     has_ready_tasks() const;
+    bool     cancel_task(uint64_t task_id);
+    bool     set_task_enabled(uint64_t task_id, bool enabled);
+    bool     is_task_enabled(uint64_t task_id) const;
     void     step();
 };
 

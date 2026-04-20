@@ -2,6 +2,7 @@
 
 #include "FeatherRuntime/FSTime.hpp"
 #include "FeatherRuntime/FSScheduler.hpp"
+#include "FeatherRuntime/FSEvent.hpp"
 
 // ---------------------------------------------------------------------------
 // Feather – public API facade
@@ -18,20 +19,35 @@ class Feather {
 
 public:
     FSScheduler scheduler;
+    FSEvents events;
     uint64_t (*now_ms)();
 
     Feather()
         : clock([]() -> uint64_t { return 0; })
         , scheduler(clock)
+        , events(&scheduler)
         , now_ms([]() -> uint64_t { return 0; }) {}
 
     explicit Feather(uint64_t (*current_time_ms_)())
         : clock(current_time_ms_)
         , scheduler(clock)
+        , events(&scheduler)
         , now_ms(current_time_ms_) {}
 
     void step() {
         scheduler.step();
+    }
+
+    bool CancelTask(uint64_t task_id) {
+        return scheduler.cancel_task(task_id);
+    }
+
+    bool SetTaskEnabled(uint64_t task_id, bool enabled) {
+        return scheduler.set_task_enabled(task_id, enabled);
+    }
+
+    bool IsTaskEnabled(uint64_t task_id) const {
+        return scheduler.is_task_enabled(task_id);
     }
 
     template<typename F>

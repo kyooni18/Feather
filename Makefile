@@ -39,6 +39,7 @@ SRCS := \
 
 HDRS := \
 	$(FEATHER_SYS)/Feather.hpp \
+	$(FEATHER_SYS)/FeatherRuntime/FSEvent.hpp \
 	$(FEATHER_SYS)/FeatherRuntime/FSScheduler.hpp \
 	$(FEATHER_SYS)/FeatherRuntime/FSTime.hpp
 
@@ -104,6 +105,7 @@ install-headers:
 	install -d $(DESTDIR)$(INCLUDEDIR)/Feather
 	install -d $(DESTDIR)$(INCLUDEDIR)/Feather/FeatherRuntime
 	install -m 644 $(FEATHER_SYS)/Feather.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/
+	install -m 644 $(FEATHER_SYS)/FeatherRuntime/FSEvent.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/FeatherRuntime/
 	install -m 644 $(FEATHER_SYS)/FeatherRuntime/FSScheduler.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/FeatherRuntime/
 	install -m 644 $(FEATHER_SYS)/FeatherRuntime/FSTime.hpp $(DESTDIR)$(INCLUDEDIR)/Feather/FeatherRuntime/
 
@@ -142,6 +144,7 @@ arduino-export: arduino-clean
 	@if [ -d examples ]; then cp -R examples $(ARDUINO_OUT)/; fi
 	@cp $(FEATHER_SYS)/Feather.hpp $(ARDUINO_OUT)/src/
 	@cp $(FEATHER_SYS)/Feather.cpp $(ARDUINO_OUT)/src/
+	@cp $(FEATHER_SYS)/FeatherRuntime/FSEvent.hpp $(ARDUINO_OUT)/src/FeatherRuntime/
 	@cp $(FEATHER_SYS)/FeatherRuntime/FSScheduler.hpp $(ARDUINO_OUT)/src/FeatherRuntime/
 	@cp $(FEATHER_SYS)/FeatherRuntime/FSScheduler.cpp $(ARDUINO_OUT)/src/FeatherRuntime/
 	@cp $(FEATHER_SYS)/FeatherRuntime/FSTime.hpp $(ARDUINO_OUT)/src/FeatherRuntime/
