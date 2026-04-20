@@ -18,7 +18,7 @@ int main() {
     int manual_action_count = 0;
     int timed_ready_count = 0;
     int timed_action_count = 0;
-    uint64_t timed_next_check_ms = 95;
+    uint64_t timed_event_next_check_ms = 95;
 
     const uint64_t periodic_id = feather.PeriodicTask(
         [&periodic_count]() { ++periodic_count; },
@@ -173,18 +173,18 @@ int main() {
     }
 
     const auto timed_event_index = feather.Event(
-        [&timed_next_check_ms](uint64_t now_ms) {
-            return now_ms >= timed_next_check_ms;
+        [&timed_event_next_check_ms](uint64_t now_ms) {
+            return now_ms >= timed_event_next_check_ms;
         },
         [](uint64_t) {
             return true;
         },
-        [&timed_action_count, &timed_next_check_ms, &timed_ready_count](
+        [&timed_action_count, &timed_event_next_check_ms, &timed_ready_count](
             FSScheduler& scheduler,
             uint64_t now_ms
         ) {
             ++timed_action_count;
-            timed_next_check_ms = now_ms + 20;
+            timed_event_next_check_ms = now_ms + 20;
             scheduler.enqueue_ready_task(
                 [&timed_ready_count]() { ++timed_ready_count; },
                 1
@@ -219,7 +219,7 @@ int main() {
         std::cerr << "timed event should dispatch at its scheduled time\n";
         return 1;
     }
-    if (timed_next_check_ms != 115) {
+    if (timed_event_next_check_ms != 115) {
         std::cerr << "timed event should update its next check time\n";
         return 1;
     }
