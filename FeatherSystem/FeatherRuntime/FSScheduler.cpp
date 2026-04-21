@@ -3,8 +3,10 @@
 FSScheduler::FSScheduler(FSTime& clock_src)
     : clock(clock_src)
     , ready_task_queue{}
+    , next_ready_sequence{0}
     , instant_task_records{}
     , instant_rr_cursor{0}
+    , instant_rr_budget_remaining{0}
     , timed_heap{}
     , next_wakeup_time{0}
     , next_id{1} {
@@ -70,11 +72,13 @@ bool FSScheduler::cancel_task(uint64_t task_id) {
         instant_task_records.erase(instant_task_records.begin() + i);
         if (instant_task_records.empty()) {
             instant_rr_cursor = 0;
+            instant_rr_budget_remaining = 0;
         } else if (i < instant_rr_cursor) {
             --instant_rr_cursor;
         } else if (instant_rr_cursor >= instant_task_records.size()) {
             instant_rr_cursor = 0;
         }
+        instant_rr_budget_remaining = 0;
         return true;
     }
 
@@ -124,7 +128,7 @@ void FSScheduler::step() {
     prune_cancelled_timed_tasks();
 
     if (!ready_task_queue.empty()) {
-        ReadyTaskRecord record = std::move(ready_task_queue.front());
+        ReadyTaskRecord record = std::move(const_cast<ReadyTaskRecord&>(ready_task_queue.top()));
         ready_task_queue.pop();
         if (record.task) {
             record.task();
@@ -134,10 +138,17 @@ void FSScheduler::step() {
     if (!instant_task_records.empty()) {
         if (instant_rr_cursor >= instant_task_records.size()) {
             instant_rr_cursor = 0;
+            instant_rr_budget_remaining = 0;
         }
         auto& rec = instant_task_records[instant_rr_cursor];
+        if (instant_rr_budget_remaining == 0) {
+            instant_rr_budget_remaining = slices_for_budget(rec.budget);
+        }
         if (rec.task) rec.task();
-        instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
+        --instant_rr_budget_remaining;
+        if (instant_rr_budget_remaining == 0) {
+            instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
+        }
     }
 
     while (!timed_heap.empty() && timed_heap.top().next_fire_ms <= now_ms) {

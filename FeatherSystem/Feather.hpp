@@ -12,7 +12,7 @@
 // Feather – public API facade
 //
 // External interface uses "priority" (uint8_t, 0–15).
-// Internally, the scheduler stores it as "budget".
+// Internally, the scheduler stores it as a 4-bit execution budget.
 //
 // All task-registration methods are templates so that lambdas (including
 // those capturing local variables) can be passed directly at the call site

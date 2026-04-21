@@ -104,6 +104,79 @@ int main() {
         return 1;
     }
 
+    {
+        FSTime ready_clock(fake_now_ms);
+        FSScheduler ready_scheduler(ready_clock);
+        int ready_order = 0;
+        int low_ready_order = 0;
+        int high_ready_order = 0;
+
+        ready_scheduler.enqueue_ready_task(
+            [&low_ready_order, &ready_order]() { low_ready_order = ++ready_order; },
+            0
+        );
+        ready_scheduler.enqueue_ready_task(
+            [&high_ready_order, &ready_order]() { high_ready_order = ++ready_order; },
+            3
+        );
+
+        ready_scheduler.step();
+        if (high_ready_order != 1 || low_ready_order != 0) {
+            std::cerr << "ready queue should execute higher budget first\n";
+            return 1;
+        }
+        ready_scheduler.step();
+        if (low_ready_order != 2) {
+            std::cerr << "ready queue should preserve lower budget work\n";
+            return 1;
+        }
+    }
+
+    {
+        Feather budget_feather(fake_now_ms);
+        int low_budget_count = 0;
+        int high_budget_count = 0;
+
+        budget_feather.InstantTask([&low_budget_count]() { ++low_budget_count; }, 0);
+        budget_feather.InstantTask([&high_budget_count]() { ++high_budget_count; }, 3);
+
+        for (int i = 0; i < 10; ++i) {
+            budget_feather.step();
+        }
+
+        if (low_budget_count != 2 || high_budget_count != 8) {
+            std::cerr << "instant tasks should use weighted budget slices: low="
+                      << low_budget_count << " high=" << high_budget_count << "\n";
+            return 1;
+        }
+    }
+
+    {
+        FSTime timed_clock(fake_now_ms);
+        FSScheduler timed_scheduler(timed_clock);
+        int timed_order = 0;
+        int low_timed_order = 0;
+        int high_timed_order = 0;
+
+        fake_now_ms_value = 200;
+        timed_scheduler.add_deferred_task(
+            [&low_timed_order, &timed_order]() { low_timed_order = ++timed_order; },
+            200,
+            0
+        );
+        timed_scheduler.add_deferred_task(
+            [&high_timed_order, &timed_order]() { high_timed_order = ++timed_order; },
+            200,
+            3
+        );
+
+        timed_scheduler.step();
+        if (high_timed_order != 1 || low_timed_order != 2) {
+            std::cerr << "timed tasks with matching fire time should use budget order\n";
+            return 1;
+        }
+    }
+
     bool manual_pending = false;
     bool manual_condition_met = false;
 

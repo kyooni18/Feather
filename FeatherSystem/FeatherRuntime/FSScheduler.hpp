@@ -96,30 +96,54 @@ private:
 
     FSTime clock;
 
+    static constexpr uint8_t MaxBudget = 0x0F;
+
+    static uint8_t normalize_budget(uint8_t priority) {
+        return static_cast<uint8_t>(priority & MaxBudget);
+    }
+
+    static uint8_t slices_for_budget(uint8_t budget) {
+        return static_cast<uint8_t>((budget & MaxBudget) + 1u);
+    }
+
     // -----------------------------------------------------------------------
     // Ready queue — one-shot work scheduled by events or other runtime hooks.
-    // Tasks are queued FIFO and executed on subsequent scheduler steps.
+    // Higher budgets run first; matching budgets preserve FIFO order.
     // -----------------------------------------------------------------------
     struct ReadyTaskRecord {
         FSCallback task;
-        uint8_t    budget = 0;
+        uint8_t    budget   = 0;
+        uint64_t   sequence = 0;
     };
 
-    std::queue<ReadyTaskRecord> ready_task_queue;
+    struct ReadyTaskCmp {
+        bool operator()(const ReadyTaskRecord& a, const ReadyTaskRecord& b) const {
+            if (a.budget != b.budget) {
+                return a.budget < b.budget;
+            }
+            return a.sequence > b.sequence;
+        }
+    };
+
+    std::priority_queue<ReadyTaskRecord,
+                        std::vector<ReadyTaskRecord>,
+                        ReadyTaskCmp> ready_task_queue;
+    uint64_t next_ready_sequence = 0;
 
     // -----------------------------------------------------------------------
     // Instant tasks — stored once in a flat vector; executed by a simple
-    // round-robin cursor directly on the original records.
-    // No expansion arrays, no rebuild phase, no weighted-RR overhead.
+    // weighted round-robin cursor directly on the original records.
+    // A budget of 0 still receives 1 execution slice; 15 receives 16 slices.
     // -----------------------------------------------------------------------
     struct InstantTaskRecord {
         FSCallback task;
-        uint8_t    budget = 0;  // 4-bit priority value passed by the user (0–15)
         uint64_t   id     = 0;
+        uint8_t    budget = 0;
     };
 
     std::vector<InstantTaskRecord> instant_task_records;
     size_t instant_rr_cursor = 0;
+    uint8_t instant_rr_budget_remaining = 0;
 
     // -----------------------------------------------------------------------
     // Timed tasks — single min-heap keyed on next_fire_ms.
@@ -128,17 +152,23 @@ private:
     // -----------------------------------------------------------------------
     struct TimedTaskRecord {
         uint64_t   next_fire_ms = 0;
-        FSCallback task;
-        uint8_t    budget    = 0;  // 4-bit priority value (0–15)
-        uint32_t   period_ms = 0;
         uint64_t   id        = 0;
+        FSCallback task;
+        uint32_t   period_ms = 0;
+        uint8_t    budget    = 0;
         FSSchedulerPeriodicTaskRepeatAllocationType repeat_type =
             FSSchedulerPeriodicTaskRepeatAllocationType::Absolute;
     };
 
     struct TimedTaskCmp {
         bool operator()(const TimedTaskRecord& a, const TimedTaskRecord& b) const {
-            return a.next_fire_ms > b.next_fire_ms;
+            if (a.next_fire_ms != b.next_fire_ms) {
+                return a.next_fire_ms > b.next_fire_ms;
+            }
+            if (a.budget != b.budget) {
+                return a.budget < b.budget;
+            }
+            return a.id > b.id;
         }
     };
 
@@ -172,8 +202,9 @@ public:
     //
     // Each method accepts any void() callable directly — lambdas with
     // local-variable captures, functors, etc. — and wraps it into an
-    // FSCallback. The external name is "priority"; internally it is stored
-    // as "budget" (4-bit, 0–15).
+    // FSCallback. The external name is "priority"; internally it is stored as
+    // a 4-bit budget. Ready tasks use budget for ordering, instant tasks use it
+    // for weighted round-robin slices, and timed tasks use it to break ties.
     // -----------------------------------------------------------------------
 
     template<typename F>
@@ -181,7 +212,8 @@ public:
         ready_task_queue.push(
             ReadyTaskRecord{
                 FSCallback(std::forward<F>(task)),
-                static_cast<uint8_t>(priority & 0x0F)
+                normalize_budget(priority),
+                next_ready_sequence++
             }
         );
     }
@@ -192,8 +224,8 @@ public:
         instant_task_records.push_back(
             InstantTaskRecord{
                 FSCallback(std::forward<F>(task)),
-                static_cast<uint8_t>(priority & 0x0F),
-                id
+                id,
+                normalize_budget(priority)
             }
         );
         return id;
@@ -204,10 +236,10 @@ public:
         const uint64_t id = next_id++;
         TimedTaskRecord rec{
             timestamp_ms,
-            FSCallback(std::forward<F>(task)),
-            static_cast<uint8_t>(priority & 0x0F),
-            0u,
             id,
+            FSCallback(std::forward<F>(task)),
+            0u,
+            normalize_budget(priority),
             FSSchedulerPeriodicTaskRepeatAllocationType::Absolute
         };
         timed_heap.push(std::move(rec));
@@ -227,10 +259,10 @@ public:
         const uint64_t id = next_id++;
         TimedTaskRecord rec{
             start_timestamp_ms,
-            FSCallback(std::forward<F>(task)),
-            static_cast<uint8_t>(priority & 0x0F),
-            period_ms,
             id,
+            FSCallback(std::forward<F>(task)),
+            period_ms,
+            normalize_budget(priority),
             allocation_type
         };
         timed_heap.push(std::move(rec));

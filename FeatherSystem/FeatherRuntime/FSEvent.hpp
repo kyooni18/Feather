@@ -10,11 +10,6 @@
 
 #include "FSScheduler.hpp"
 
-struct FSEventPollResult {
-    bool condition_matched = false;
-    bool task_dispatched = false;
-};
-
 class FSEvent {
 private:
     static constexpr size_t InlineStorageSize = 64;
@@ -220,21 +215,18 @@ public:
         enabled_ = enabled;
     }
 
-    FSEventPollResult poll(FSScheduler& scheduler, uint64_t now_ms) {
-        FSEventPollResult result;
+    bool poll(FSScheduler& scheduler, uint64_t now_ms) {
         if (!enabled_ || storage_ == nullptr || ops_ == nullptr ||
             ops_->condition == nullptr || ops_->dispatch_task == nullptr) {
-            return result;
+            return false;
         }
 
-        result.condition_matched = ops_->condition(storage_, now_ms);
-        if (!result.condition_matched) {
-            return result;
+        if (!ops_->condition(storage_, now_ms)) {
+            return false;
         }
 
         ops_->dispatch_task(storage_, scheduler, now_ms);
-        result.task_dispatched = true;
-        return result;
+        return true;
     }
 };
 
@@ -403,7 +395,7 @@ public:
         if (scheduler == nullptr || !is_handle_live(handle)) {
             return false;
         }
-        return events[handle.index].poll(*scheduler, now_ms).task_dispatched;
+        return events[handle.index].poll(*scheduler, now_ms);
     }
 
     size_t poll_all(uint64_t now_ms) {
@@ -416,7 +408,7 @@ public:
             if (!occupied[index]) {
                 continue;
             }
-            if (events[index].poll(*scheduler, now_ms).task_dispatched) {
+            if (events[index].poll(*scheduler, now_ms)) {
                 ++dispatched;
             }
         }
