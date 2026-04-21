@@ -62,7 +62,7 @@ public:
 
     template<typename F>
     uint64_t DeferredTask(F&& task, uint64_t time_to_run, uint8_t priority) {
-        return scheduler.add_deferred_task(std::forward<F>(task), time_to_run, priority);
+        return scheduler.add_deferred_task(std::forward<F>(task), now_ms() + time_to_run, priority);
     }
 
     template<typename F>
@@ -75,7 +75,7 @@ public:
             FSSchedulerPeriodicTaskRepeatAllocationType::Absolute
     ) {
         return scheduler.add_periodic_task(
-            std::forward<F>(task), time_to_run, repeat_cycle, priority, allocation_type);
+            std::forward<F>(task), now_ms() + time_to_run, repeat_cycle, priority, allocation_type);
     }
 
     template<typename Condition, typename Task>
