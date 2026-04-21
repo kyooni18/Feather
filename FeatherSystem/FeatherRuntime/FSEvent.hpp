@@ -11,9 +11,8 @@
 #include "FSScheduler.hpp"
 
 struct FSEventPollResult {
-    bool trigger_matched   = false;
     bool condition_matched = false;
-    bool action_dispatched = false;
+    bool task_dispatched = false;
 };
 
 class FSEvent {
@@ -23,9 +22,8 @@ private:
     struct Ops {
         void (*destroy_storage)(void*) = nullptr;
         void (*move_construct_storage)(void* dst, void* src) = nullptr;
-        bool (*trigger)(void*, uint64_t) = nullptr;
         bool (*condition)(void*, uint64_t) = nullptr;
-        void (*action)(void*, FSScheduler&, uint64_t) = nullptr;
+        void (*dispatch_task)(void*, FSScheduler&, uint64_t) = nullptr;
     };
 
     alignas(std::max_align_t) unsigned char inline_storage_[InlineStorageSize];
@@ -65,34 +63,34 @@ private:
 public:
     FSEvent() = default;
 
-    template<typename Trigger, typename Condition, typename Action>
+    template<typename Condition, typename Task>
     static FSEvent make(
-        Trigger&&   trigger,
         Condition&& condition,
-        Action&&    action,
+        Task&&      task,
+        uint8_t     priority,
         bool        enabled = true
     ) {
-        using StoredTrigger = std::decay_t<Trigger>;
         using StoredCondition = std::decay_t<Condition>;
-        using StoredAction = std::decay_t<Action>;
+        using StoredTask = std::decay_t<Task>;
 
-        static_assert(
-            std::is_invocable_r_v<bool, StoredTrigger&, uint64_t>,
-            "Trigger must be callable as bool(uint64_t)"
-        );
         static_assert(
             std::is_invocable_r_v<bool, StoredCondition&, uint64_t>,
             "Condition must be callable as bool(uint64_t)"
         );
         static_assert(
-            std::is_invocable_r_v<void, StoredAction&, FSScheduler&, uint64_t>,
-            "Action must be callable as void(FSScheduler&, uint64_t)"
+            std::is_invocable_r_v<void, StoredTask&> ||
+                std::is_invocable_r_v<void, StoredTask&, uint64_t>,
+            "Task must be callable as void() or void(uint64_t)"
+        );
+        static_assert(
+            std::is_copy_constructible_v<StoredTask>,
+            "Task must be copy-constructible so it can be queued when the event fires"
         );
 
         struct Storage {
-            StoredTrigger trigger;
             StoredCondition condition;
-            StoredAction action;
+            StoredTask task;
+            uint8_t priority;
         };
 
         static const Ops ops{
@@ -101,10 +99,6 @@ public:
             },
             [](void* dst, void* src) {
                 new (dst) Storage(std::move(*static_cast<Storage*>(src)));
-            },
-            [](void* ptr, uint64_t now_ms) -> bool {
-                auto* typed = static_cast<Storage*>(ptr);
-                return typed->trigger(now_ms);
             },
             [](void* ptr, uint64_t now_ms) -> bool {
                 auto* typed = static_cast<Storage*>(ptr);
@@ -112,7 +106,16 @@ public:
             },
             [](void* ptr, FSScheduler& scheduler, uint64_t now_ms) {
                 auto* typed = static_cast<Storage*>(ptr);
-                typed->action(scheduler, now_ms);
+                if constexpr (std::is_invocable_r_v<void, StoredTask&, uint64_t>) {
+                    scheduler.enqueue_ready_task(
+                        [task = typed->task, now_ms]() mutable {
+                            task(now_ms);
+                        },
+                        typed->priority
+                    );
+                } else {
+                    scheduler.enqueue_ready_task(typed->task, typed->priority);
+                }
             }
         };
 
@@ -120,17 +123,17 @@ public:
         if constexpr (fits_inline_storage<Storage>()) {
             event.storage_ = event.inline_storage_ptr();
             new (event.storage_) Storage{
-                std::forward<Trigger>(trigger),
                 std::forward<Condition>(condition),
-                std::forward<Action>(action)
+                std::forward<Task>(task),
+                static_cast<uint8_t>(priority & 0x0F)
             };
             event.uses_heap_storage_ = false;
         } else {
             event.storage_ = ::operator new(sizeof(Storage));
             new (event.storage_) Storage{
-                std::forward<Trigger>(trigger),
                 std::forward<Condition>(condition),
-                std::forward<Action>(action)
+                std::forward<Task>(task),
+                static_cast<uint8_t>(priority & 0x0F)
             };
             event.uses_heap_storage_ = true;
         }
@@ -140,84 +143,21 @@ public:
         return event;
     }
 
-    template<typename Trigger, typename Action>
-    static FSEvent make(Trigger&& trigger, Action&& action, bool enabled = true) {
-        using StoredTrigger = std::decay_t<Trigger>;
-        using StoredAction = std::decay_t<Action>;
-
-        static_assert(
-            std::is_invocable_r_v<bool, StoredTrigger&, uint64_t>,
-            "Trigger must be callable as bool(uint64_t)"
-        );
-        static_assert(
-            std::is_invocable_r_v<void, StoredAction&, FSScheduler&, uint64_t>,
-            "Action must be callable as void(FSScheduler&, uint64_t)"
-        );
-
-        struct Storage {
-            StoredTrigger trigger;
-            StoredAction action;
-        };
-
-        static const Ops ops{
-            [](void* ptr) {
-                static_cast<Storage*>(ptr)->~Storage();
-            },
-            [](void* dst, void* src) {
-                new (dst) Storage(std::move(*static_cast<Storage*>(src)));
-            },
-            [](void* ptr, uint64_t now_ms) -> bool {
-                auto* typed = static_cast<Storage*>(ptr);
-                return typed->trigger(now_ms);
-            },
-            nullptr,
-            [](void* ptr, FSScheduler& scheduler, uint64_t now_ms) {
-                auto* typed = static_cast<Storage*>(ptr);
-                typed->action(scheduler, now_ms);
-            }
-        };
-
-        FSEvent event;
-        if constexpr (fits_inline_storage<Storage>()) {
-            event.storage_ = event.inline_storage_ptr();
-            new (event.storage_) Storage{
-                std::forward<Trigger>(trigger),
-                std::forward<Action>(action)
-            };
-            event.uses_heap_storage_ = false;
-        } else {
-            event.storage_ = ::operator new(sizeof(Storage));
-            new (event.storage_) Storage{
-                std::forward<Trigger>(trigger),
-                std::forward<Action>(action)
-            };
-            event.uses_heap_storage_ = true;
-        }
-
-        event.ops_ = &ops;
-        event.enabled_ = enabled;
-        return event;
-    }
-
-    template<typename Trigger, typename Condition, typename Action>
+    template<typename Condition, typename Task>
     FSEvent(
-        Trigger&&   trigger,
         Condition&& condition,
-        Action&&    action,
+        Task&&      task,
+        uint8_t     priority,
         bool        enabled = true
     )
         : FSEvent(
               make(
-                  std::forward<Trigger>(trigger),
                   std::forward<Condition>(condition),
-                  std::forward<Action>(action),
+                  std::forward<Task>(task),
+                  priority,
                   enabled
               )
           ) {}
-
-    template<typename Trigger, typename Action>
-    FSEvent(Trigger&& trigger, Action&& action, bool enabled = true)
-        : FSEvent(make(std::forward<Trigger>(trigger), std::forward<Action>(action), enabled)) {}
 
     ~FSEvent() {
         reset();
@@ -283,27 +223,17 @@ public:
     FSEventPollResult poll(FSScheduler& scheduler, uint64_t now_ms) {
         FSEventPollResult result;
         if (!enabled_ || storage_ == nullptr || ops_ == nullptr ||
-            ops_->trigger == nullptr || ops_->action == nullptr) {
+            ops_->condition == nullptr || ops_->dispatch_task == nullptr) {
             return result;
         }
 
-        result.trigger_matched = ops_->trigger(storage_, now_ms);
-        if (!result.trigger_matched) {
-            return result;
-        }
-
-        if (ops_->condition == nullptr) {
-            result.condition_matched = true;
-        } else {
-            result.condition_matched = ops_->condition(storage_, now_ms);
-        }
-
+        result.condition_matched = ops_->condition(storage_, now_ms);
         if (!result.condition_matched) {
             return result;
         }
 
-        ops_->action(storage_, scheduler, now_ms);
-        result.action_dispatched = true;
+        ops_->dispatch_task(storage_, scheduler, now_ms);
+        result.task_dispatched = true;
         return result;
     }
 };
@@ -473,7 +403,7 @@ public:
         if (scheduler == nullptr || !is_handle_live(handle)) {
             return false;
         }
-        return events[handle.index].poll(*scheduler, now_ms).action_dispatched;
+        return events[handle.index].poll(*scheduler, now_ms).task_dispatched;
     }
 
     size_t poll_all(uint64_t now_ms) {
@@ -486,7 +416,7 @@ public:
             if (!occupied[index]) {
                 continue;
             }
-            if (events[index].poll(*scheduler, now_ms).action_dispatched) {
+            if (events[index].poll(*scheduler, now_ms).task_dispatched) {
                 ++dispatched;
             }
         }

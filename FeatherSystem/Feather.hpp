@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 
 #include "FeatherRuntime/FSTime.hpp"
@@ -38,6 +39,7 @@ public:
         , now_ms(current_time_ms_) {}
 
     void step() {
+        events.poll_all();
         scheduler.step();
     }
 
@@ -76,29 +78,18 @@ public:
             std::forward<F>(task), time_to_run, repeat_cycle, priority, allocation_type);
     }
 
-    template<typename Trigger, typename Condition, typename Action>
+    template<typename Condition, typename Task>
     FSEventHandle Event(
-        Trigger&&   trigger,
         Condition&& condition,
-        Action&&    action,
+        Task&&      task,
+        uint8_t     priority,
         bool        enabled = true
     ) {
         return events.add_event(
             FSEvent::make(
-                std::forward<Trigger>(trigger),
                 std::forward<Condition>(condition),
-                std::forward<Action>(action),
-                enabled
-            )
-        );
-    }
-
-    template<typename Trigger, typename Action>
-    FSEventHandle Event(Trigger&& trigger, Action&& action, bool enabled = true) {
-        return events.add_event(
-            FSEvent::make(
-                std::forward<Trigger>(trigger),
-                std::forward<Action>(action),
+                std::forward<Task>(task),
+                priority,
                 enabled
             )
         );

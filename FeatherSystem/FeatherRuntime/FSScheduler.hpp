@@ -1,6 +1,7 @@
 #ifndef FEATHER_FSSCHEDULER_H
 #define FEATHER_FSSCHEDULER_H
 
+#include <cstddef>
 #include <cstdint>
 #include <unordered_map>
 #include <type_traits>
