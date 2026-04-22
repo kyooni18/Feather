@@ -18,7 +18,7 @@ private:
         void (*destroy_storage)(void*) = nullptr;
         void (*move_construct_storage)(void* dst, void* src) = nullptr;
         bool (*condition)(void*, uint64_t) = nullptr;
-        void (*dispatch_task)(void*, FSScheduler&, uint64_t) = nullptr;
+        void (*invoke_task)(void*, uint64_t) = nullptr;
     };
 
     alignas(std::max_align_t) unsigned char inline_storage_[InlineStorageSize];
@@ -26,6 +26,10 @@ private:
     const Ops* ops_ = nullptr;
     bool enabled_ = true;
     bool uses_heap_storage_ = false;
+    bool dispatch_pending_ = false;
+    bool dispatching_ = false;
+    uint32_t dispatch_epoch_ = 0;
+    uint8_t priority_ = 0;
 
     void* inline_storage_ptr() {
         return static_cast<void*>(inline_storage_);
@@ -46,6 +50,10 @@ private:
         ops_ = nullptr;
         enabled_ = true;
         uses_heap_storage_ = false;
+        dispatch_pending_ = false;
+        dispatching_ = false;
+        dispatch_epoch_ = 0;
+        priority_ = 0;
     }
 
     template<typename Storage>
@@ -77,15 +85,10 @@ public:
                 std::is_invocable_r_v<void, StoredTask&, uint64_t>,
             "Task must be callable as void() or void(uint64_t)"
         );
-        static_assert(
-            std::is_copy_constructible_v<StoredTask>,
-            "Task must be copy-constructible so it can be queued when the event fires"
-        );
 
         struct Storage {
             StoredCondition condition;
             StoredTask task;
-            uint8_t priority;
         };
 
         static const Ops ops{
@@ -99,17 +102,12 @@ public:
                 auto* typed = static_cast<Storage*>(ptr);
                 return typed->condition(now_ms);
             },
-            [](void* ptr, FSScheduler& scheduler, uint64_t now_ms) {
+            [](void* ptr, uint64_t now_ms) {
                 auto* typed = static_cast<Storage*>(ptr);
                 if constexpr (std::is_invocable_r_v<void, StoredTask&, uint64_t>) {
-                    scheduler.enqueue_ready_task(
-                        [task = typed->task, now_ms]() mutable {
-                            task(now_ms);
-                        },
-                        typed->priority
-                    );
+                    typed->task(now_ms);
                 } else {
-                    scheduler.enqueue_ready_task(typed->task, typed->priority);
+                    typed->task();
                 }
             }
         };
@@ -119,22 +117,21 @@ public:
             event.storage_ = event.inline_storage_ptr();
             new (event.storage_) Storage{
                 std::forward<Condition>(condition),
-                std::forward<Task>(task),
-                static_cast<uint8_t>(priority & 0x0F)
+                std::forward<Task>(task)
             };
             event.uses_heap_storage_ = false;
         } else {
             event.storage_ = ::operator new(sizeof(Storage));
             new (event.storage_) Storage{
                 std::forward<Condition>(condition),
-                std::forward<Task>(task),
-                static_cast<uint8_t>(priority & 0x0F)
+                std::forward<Task>(task)
             };
             event.uses_heap_storage_ = true;
         }
 
         event.ops_ = &ops;
         event.enabled_ = enabled;
+        event.priority_ = static_cast<uint8_t>(priority & 0x0F);
         return event;
     }
 
@@ -162,7 +159,11 @@ public:
         : storage_(nullptr)
         , ops_(other.ops_)
         , enabled_(other.enabled_)
-        , uses_heap_storage_(other.uses_heap_storage_) {
+        , uses_heap_storage_(other.uses_heap_storage_)
+        , dispatch_pending_(other.dispatch_pending_)
+        , dispatching_(false)
+        , dispatch_epoch_(other.dispatch_epoch_)
+        , priority_(other.priority_) {
         if (other.storage_ != nullptr) {
             if (other.uses_heap_storage_) {
                 storage_ = other.storage_;
@@ -177,6 +178,10 @@ public:
         other.ops_ = nullptr;
         other.enabled_ = true;
         other.uses_heap_storage_ = false;
+        other.dispatch_pending_ = false;
+        other.dispatching_ = false;
+        other.dispatch_epoch_ = 0;
+        other.priority_ = 0;
     }
 
     FSEvent& operator=(FSEvent&& other) noexcept {
@@ -185,6 +190,10 @@ public:
             ops_ = other.ops_;
             enabled_ = other.enabled_;
             uses_heap_storage_ = other.uses_heap_storage_;
+            dispatch_pending_ = other.dispatch_pending_;
+            dispatching_ = false;
+            dispatch_epoch_ = other.dispatch_epoch_;
+            priority_ = other.priority_;
 
             if (other.storage_ != nullptr) {
                 if (other.uses_heap_storage_) {
@@ -200,6 +209,10 @@ public:
             other.ops_ = nullptr;
             other.enabled_ = true;
             other.uses_heap_storage_ = false;
+            other.dispatch_pending_ = false;
+            other.dispatching_ = false;
+            other.dispatch_epoch_ = 0;
+            other.priority_ = 0;
         }
         return *this;
     }
@@ -212,12 +225,50 @@ public:
     }
 
     void set_enabled(bool enabled) {
+        if (!enabled) {
+            cancel_pending_dispatch();
+        }
         enabled_ = enabled;
     }
 
-    bool poll(FSScheduler& scheduler, uint64_t now_ms) {
+    uint8_t priority() const {
+        return priority_;
+    }
+
+    bool is_dispatching() const {
+        return dispatching_;
+    }
+
+    uint32_t dispatch_epoch() const {
+        return dispatch_epoch_;
+    }
+
+    bool mark_dispatch_pending() {
+        if (dispatch_pending_) {
+            return false;
+        }
+        dispatch_pending_ = true;
+        return true;
+    }
+
+    void cancel_pending_dispatch() {
+        if (dispatch_pending_) {
+            dispatch_pending_ = false;
+            ++dispatch_epoch_;
+        }
+    }
+
+    bool consume_pending_dispatch(uint32_t epoch) {
+        if (dispatch_epoch_ != epoch || !dispatch_pending_) {
+            return false;
+        }
+        dispatch_pending_ = false;
+        return true;
+    }
+
+    bool condition_matches(uint64_t now_ms) {
         if (!enabled_ || storage_ == nullptr || ops_ == nullptr ||
-            ops_->condition == nullptr || ops_->dispatch_task == nullptr) {
+            ops_->condition == nullptr || ops_->invoke_task == nullptr) {
             return false;
         }
 
@@ -225,7 +276,33 @@ public:
             return false;
         }
 
-        ops_->dispatch_task(storage_, scheduler, now_ms);
+        return true;
+    }
+
+    void dispatch(uint64_t now_ms) {
+        if (storage_ == nullptr || ops_ == nullptr || ops_->invoke_task == nullptr) {
+            return;
+        }
+        dispatching_ = true;
+        ops_->invoke_task(storage_, now_ms);
+        dispatching_ = false;
+    }
+
+    bool poll(FSScheduler& scheduler, uint64_t now_ms) {
+        if (!condition_matches(now_ms) || !mark_dispatch_pending()) {
+            return false;
+        }
+
+        const uint32_t epoch = dispatch_epoch_;
+        scheduler.enqueue_ready_task(
+            [this, epoch, now_ms]() {
+                if (!consume_pending_dispatch(epoch) || !is_enabled()) {
+                    return;
+                }
+                dispatch(now_ms);
+            },
+            priority_
+        );
         return true;
     }
 };
@@ -247,51 +324,98 @@ class FSEvents {
 private:
     static constexpr size_t InvalidPosition = std::numeric_limits<size_t>::max();
 
+    struct EventSlot {
+        FSEvent event;
+        uint32_t generation = 0;
+        bool occupied = false;
+        bool pending_destroy = false;
+        size_t enabled_position = InvalidPosition;
+    };
+
     FSScheduler* scheduler = nullptr;
-    std::vector<FSEvent> events;
-    std::vector<uint32_t> generations;
-    std::vector<bool> occupied;
+    std::vector<EventSlot> slots;
     std::vector<size_t> free_indices;
 
     std::vector<size_t> enabled_dense_indices;
-    std::vector<size_t> enabled_sparse_positions;
 
     size_t active_event_count = 0;
     bool fixed_capacity_mode = false;
 
     bool is_handle_live(FSEventHandle handle) const {
-        if (!handle.is_valid() || handle.index >= events.size()) {
+        if (!handle.is_valid() || handle.index >= slots.size()) {
             return false;
         }
-        return occupied[handle.index] && generations[handle.index] == handle.generation;
+        const auto& slot = slots[handle.index];
+        return slot.occupied && slot.generation == handle.generation;
     }
 
     void add_enabled_index(size_t index) {
-        if (index >= enabled_sparse_positions.size() ||
-            enabled_sparse_positions[index] != InvalidPosition) {
+        if (index >= slots.size() || slots[index].enabled_position != InvalidPosition) {
             return;
         }
 
-        enabled_sparse_positions[index] = enabled_dense_indices.size();
+        slots[index].enabled_position = enabled_dense_indices.size();
         enabled_dense_indices.push_back(index);
     }
 
     void remove_enabled_index(size_t index) {
-        if (index >= enabled_sparse_positions.size()) {
+        if (index >= slots.size()) {
             return;
         }
 
-        const size_t position = enabled_sparse_positions[index];
+        const size_t position = slots[index].enabled_position;
         if (position == InvalidPosition || position >= enabled_dense_indices.size()) {
             return;
         }
 
         const size_t tail_index = enabled_dense_indices.back();
         enabled_dense_indices[position] = tail_index;
-        enabled_sparse_positions[tail_index] = position;
+        slots[tail_index].enabled_position = position;
 
         enabled_dense_indices.pop_back();
-        enabled_sparse_positions[index] = InvalidPosition;
+        slots[index].enabled_position = InvalidPosition;
+    }
+
+    bool enqueue_dispatch_for_index(size_t index, uint64_t now_ms) {
+        if (scheduler == nullptr || index >= slots.size()) {
+            return false;
+        }
+
+        auto& slot = slots[index];
+        if (!slot.occupied || !slot.event.condition_matches(now_ms) ||
+            !slot.event.mark_dispatch_pending()) {
+            return false;
+        }
+
+        const uint32_t generation = slot.generation;
+        const uint32_t epoch = slot.event.dispatch_epoch();
+        scheduler->enqueue_ready_task(
+            [this, index, generation, epoch, now_ms]() {
+                if (index >= slots.size()) {
+                    return;
+                }
+
+                auto& current_slot = slots[index];
+                if (!current_slot.occupied || current_slot.generation != generation) {
+                    return;
+                }
+
+                auto& event = current_slot.event;
+                if (!event.consume_pending_dispatch(epoch) || !event.is_enabled()) {
+                    return;
+                }
+
+                event.dispatch(now_ms);
+                if (current_slot.pending_destroy && !event.is_dispatching()) {
+                    current_slot.event = FSEvent{};
+                    current_slot.pending_destroy = false;
+                    current_slot.enabled_position = InvalidPosition;
+                    free_indices.push_back(index);
+                }
+            },
+            slot.event.priority()
+        );
+        return true;
     }
 
 public:
@@ -303,11 +427,8 @@ public:
     }
 
     void reserve_events(size_t count) {
-        events.reserve(count);
-        generations.reserve(count);
-        occupied.reserve(count);
+        slots.reserve(count);
         free_indices.reserve(count);
-        enabled_sparse_positions.reserve(count);
     }
 
     void set_fixed_capacity_mode(bool enabled) {
@@ -319,40 +440,41 @@ public:
         if (!free_indices.empty()) {
             index = free_indices.back();
             free_indices.pop_back();
-            events[index] = std::move(event);
-            occupied[index] = true;
+            slots[index].event = std::move(event);
+            slots[index].occupied = true;
+            slots[index].pending_destroy = false;
         } else {
-            if (fixed_capacity_mode && events.size() == events.capacity()) {
+            if (fixed_capacity_mode && slots.size() == slots.capacity()) {
                 return FSEventHandle::invalid();
             }
 
-            events.push_back(std::move(event));
-            generations.push_back(0);
-            occupied.push_back(true);
-            enabled_sparse_positions.push_back(InvalidPosition);
-            index = events.size() - 1;
+            slots.emplace_back();
+            index = slots.size() - 1;
+            slots[index].event = std::move(event);
+            slots[index].occupied = true;
+            slots[index].pending_destroy = false;
         }
 
-        if (events[index].is_enabled()) {
+        if (slots[index].event.is_enabled()) {
             add_enabled_index(index);
         }
 
         ++active_event_count;
-        return FSEventHandle{index, generations[index]};
+        return FSEventHandle{index, slots[index].generation};
     }
 
     FSEvent* event_at(FSEventHandle handle) {
         if (!is_handle_live(handle)) {
             return nullptr;
         }
-        return &events[handle.index];
+        return &slots[handle.index].event;
     }
 
     const FSEvent* event_at(FSEventHandle handle) const {
         if (!is_handle_live(handle)) {
             return nullptr;
         }
-        return &events[handle.index];
+        return &slots[handle.index].event;
     }
 
     bool start_event(FSEventHandle handle) {
@@ -382,9 +504,21 @@ public:
 
         remove_enabled_index(handle.index);
 
-        events[handle.index] = FSEvent{};
-        occupied[handle.index] = false;
-        ++generations[handle.index];
+        if (slots[handle.index].event.is_dispatching()) {
+            slots[handle.index].event.set_enabled(false);
+            slots[handle.index].occupied = false;
+            slots[handle.index].pending_destroy = true;
+            slots[handle.index].enabled_position = InvalidPosition;
+            ++slots[handle.index].generation;
+            --active_event_count;
+            return true;
+        }
+
+        slots[handle.index].event = FSEvent{};
+        slots[handle.index].occupied = false;
+        slots[handle.index].pending_destroy = false;
+        slots[handle.index].enabled_position = InvalidPosition;
+        ++slots[handle.index].generation;
 
         free_indices.push_back(handle.index);
         --active_event_count;
@@ -395,7 +529,7 @@ public:
         if (scheduler == nullptr || !is_handle_live(handle)) {
             return false;
         }
-        return events[handle.index].poll(*scheduler, now_ms);
+        return enqueue_dispatch_for_index(handle.index, now_ms);
     }
 
     size_t poll_all(uint64_t now_ms) {
@@ -405,10 +539,10 @@ public:
 
         size_t dispatched = 0;
         for (size_t index : enabled_dense_indices) {
-            if (!occupied[index]) {
+            if (index >= slots.size() || !slots[index].occupied) {
                 continue;
             }
-            if (events[index].poll(*scheduler, now_ms)) {
+            if (enqueue_dispatch_for_index(index, now_ms)) {
                 ++dispatched;
             }
         }

@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <new>
 #include <unordered_map>
 #include <type_traits>
 #include <utility>
@@ -38,45 +39,61 @@ enum FSSchedulerPeriodicTaskRepeatAllocationType {
 // ---------------------------------------------------------------------------
 // FSCallback – lightweight move-only callable wrapper
 //
-// Replaces std::function<void()> with a trampoline + heap-allocated context
-// pointer. Any void() callable (lambda with captures, functor) can be
-// constructed at the call site — no pre-declared static functions needed.
+// Replaces std::function<void()> with a trampoline and small-buffer storage.
+// Any void() callable (lambda with captures, functor) can be constructed at
+// the call site, with heap fallback only when the callable is too large or not
+// safe to move inline.
 //
-// Layout: 3 raw pointers = 24 bytes (vs std::function's typical 32–48 bytes).
 // No virtual dispatch table; invocation is a direct function-pointer call.
 // ---------------------------------------------------------------------------
 struct FSCallback {
-    void*  ctx       = nullptr;
-    void (*invoke_f )(void*) = nullptr;
+    static constexpr size_t InlineStorageSize = 32;
+
+    alignas(std::max_align_t) unsigned char inline_storage_[InlineStorageSize];
+    void*  ctx = nullptr;
+    void (*invoke_f)(void*) = nullptr;
     void (*destroy_f)(void*) = nullptr;
+    void (*move_f)(void*, void*) = nullptr;
+    bool uses_heap_storage = false;
 
     FSCallback() = default;
 
-    // Constructs from any void() callable (lambda, functor, etc.).
-    // The callable is heap-allocated once; no copies are ever made.
-    template<typename F>
+    template<typename F,
+             typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, FSCallback>>>
     explicit FSCallback(F&& f) {
         using Decay = std::decay_t<F>;
-        auto* heap  = new Decay(std::forward<F>(f));
-        ctx        = heap;
-        invoke_f   = [](void* p) { (*static_cast<Decay*>(p))(); };
-        destroy_f  = [](void* p) { delete static_cast<Decay*>(p); };
+        invoke_f = [](void* p) { (*static_cast<Decay*>(p))(); };
+        destroy_f = [](void* p) { static_cast<Decay*>(p)->~Decay(); };
+        move_f = [](void* dst, void* src) {
+            new (dst) Decay(std::move(*static_cast<Decay*>(src)));
+            static_cast<Decay*>(src)->~Decay();
+        };
+
+        if constexpr (fits_inline<Decay>()) {
+            ctx = inline_storage_;
+            new (ctx) Decay(std::forward<F>(f));
+            uses_heap_storage = false;
+        } else {
+            auto* heap = new Decay(std::forward<F>(f));
+            ctx = heap;
+            destroy_f = [](void* p) { delete static_cast<Decay*>(p); };
+            uses_heap_storage = true;
+        }
     }
 
     ~FSCallback() {
-        if (destroy_f) destroy_f(ctx);
+        reset();
     }
 
     FSCallback(FSCallback&& o) noexcept
-        : ctx(o.ctx), invoke_f(o.invoke_f), destroy_f(o.destroy_f) {
-        o.ctx = nullptr; o.invoke_f = nullptr; o.destroy_f = nullptr;
+        : ctx(nullptr) {
+        move_from(std::move(o));
     }
 
     FSCallback& operator=(FSCallback&& o) noexcept {
         if (this != &o) {
-            if (destroy_f) destroy_f(ctx);
-            ctx = o.ctx; invoke_f = o.invoke_f; destroy_f = o.destroy_f;
-            o.ctx = nullptr; o.invoke_f = nullptr; o.destroy_f = nullptr;
+            reset();
+            move_from(std::move(o));
         }
         return *this;
     }
@@ -85,7 +102,55 @@ struct FSCallback {
     FSCallback& operator=(const FSCallback&) = delete;
 
     void operator()() const { if (invoke_f) invoke_f(ctx); }
-    explicit operator bool() const { return invoke_f != nullptr; }
+    explicit operator bool() const { return ctx != nullptr && invoke_f != nullptr; }
+
+private:
+    template<typename F>
+    static constexpr bool fits_inline() {
+        return sizeof(F) <= InlineStorageSize &&
+               alignof(F) <= alignof(std::max_align_t) &&
+               std::is_nothrow_move_constructible_v<F>;
+    }
+
+    void reset() {
+        if (ctx != nullptr && destroy_f != nullptr) {
+            destroy_f(ctx);
+        }
+        ctx = nullptr;
+        invoke_f = nullptr;
+        destroy_f = nullptr;
+        move_f = nullptr;
+        uses_heap_storage = false;
+    }
+
+    void move_from(FSCallback&& o) noexcept {
+        invoke_f = o.invoke_f;
+        destroy_f = o.destroy_f;
+        move_f = o.move_f;
+        uses_heap_storage = o.uses_heap_storage;
+
+        if (o.ctx == nullptr) {
+            ctx = nullptr;
+            invoke_f = nullptr;
+            destroy_f = nullptr;
+            move_f = nullptr;
+            uses_heap_storage = false;
+            return;
+        }
+
+        if (o.uses_heap_storage) {
+            ctx = o.ctx;
+        } else {
+            ctx = inline_storage_;
+            move_f(ctx, o.ctx);
+        }
+
+        o.ctx = nullptr;
+        o.invoke_f = nullptr;
+        o.destroy_f = nullptr;
+        o.move_f = nullptr;
+        o.uses_heap_storage = false;
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -139,11 +204,13 @@ private:
         FSCallback task;
         uint64_t   id     = 0;
         uint8_t    budget = 0;
+        bool       active = true;
     };
 
     std::vector<InstantTaskRecord> instant_task_records;
     size_t instant_rr_cursor = 0;
     uint8_t instant_rr_budget_remaining = 0;
+    size_t active_instant_task_count = 0;
 
     // -----------------------------------------------------------------------
     // Timed tasks — single min-heap keyed on next_fire_ms.
@@ -153,11 +220,7 @@ private:
     struct TimedTaskRecord {
         uint64_t   next_fire_ms = 0;
         uint64_t   id        = 0;
-        FSCallback task;
-        uint32_t   period_ms = 0;
         uint8_t    budget    = 0;
-        FSSchedulerPeriodicTaskRepeatAllocationType repeat_type =
-            FSSchedulerPeriodicTaskRepeatAllocationType::Absolute;
     };
 
     struct TimedTaskCmp {
@@ -173,21 +236,57 @@ private:
     };
 
     struct TimedTaskState {
+        FSCallback task;
+        uint32_t   period_ms = 0;
+        uint8_t    budget    = 0;
+        FSSchedulerPeriodicTaskRepeatAllocationType repeat_type =
+            FSSchedulerPeriodicTaskRepeatAllocationType::Absolute;
         bool enabled     = true;
         bool cancelled   = false;
         bool is_periodic = false;
+        bool dispatch_pending = false;
+        uint32_t dispatch_epoch = 0;
+        bool in_timed_heap = true;
+
+        TimedTaskState() = default;
+
+        TimedTaskState(
+            FSCallback&& callback,
+            uint32_t period,
+            uint8_t task_budget,
+            FSSchedulerPeriodicTaskRepeatAllocationType allocation_type,
+            bool periodic
+        )
+            : task(std::move(callback))
+            , period_ms(period)
+            , budget(task_budget)
+            , repeat_type(allocation_type)
+            , enabled(true)
+            , cancelled(false)
+            , is_periodic(periodic)
+            , dispatch_pending(false)
+            , dispatch_epoch(0)
+            , in_timed_heap(true) {}
     };
 
     std::priority_queue<TimedTaskRecord,
                         std::vector<TimedTaskRecord>,
                         TimedTaskCmp> timed_heap;
     std::unordered_map<uint64_t, TimedTaskState> timed_task_states;
+    size_t cancelled_timed_task_count = 0;
 
     uint64_t next_wakeup_time = 0;
     uint64_t next_id          = 1;
 
     void maybe_shrink_timed_heap();
     void prune_cancelled_timed_tasks();
+    void maybe_rebuild_cancelled_timed_heap();
+    void rebuild_cancelled_timed_heap();
+    void promote_due_timed_tasks(uint64_t now_ms);
+    void enqueue_ready_callback(FSCallback&& task, uint8_t priority);
+    bool run_one_ready_task();
+    bool run_one_instant_task();
+    void invoke_timed_ready_task(uint64_t task_id, uint32_t dispatch_epoch);
 
 public:
 
@@ -209,13 +308,7 @@ public:
 
     template<typename F>
     void enqueue_ready_task(F&& task, uint8_t priority) {
-        ready_task_queue.push(
-            ReadyTaskRecord{
-                FSCallback(std::forward<F>(task)),
-                normalize_budget(priority),
-                next_ready_sequence++
-            }
-        );
+        enqueue_ready_callback(FSCallback(std::forward<F>(task)), priority);
     }
 
     template<typename F>
@@ -225,25 +318,30 @@ public:
             InstantTaskRecord{
                 FSCallback(std::forward<F>(task)),
                 id,
-                normalize_budget(priority)
+                normalize_budget(priority),
+                true
             }
         );
+        ++active_instant_task_count;
         return id;
     }
 
     template<typename F>
     uint64_t add_deferred_task(F&& task, uint64_t timestamp_ms, uint8_t priority) {
         const uint64_t id = next_id++;
-        TimedTaskRecord rec{
-            timestamp_ms,
-            id,
-            FSCallback(std::forward<F>(task)),
-            0u,
-            normalize_budget(priority),
-            FSSchedulerPeriodicTaskRepeatAllocationType::Absolute
-        };
+        const uint8_t budget = normalize_budget(priority);
+        TimedTaskRecord rec{timestamp_ms, id, budget};
         timed_heap.push(std::move(rec));
-        timed_task_states.emplace(id, TimedTaskState{true, false, false});
+        timed_task_states.emplace(
+            id,
+            TimedTaskState{
+                FSCallback(std::forward<F>(task)),
+                0u,
+                budget,
+                FSSchedulerPeriodicTaskRepeatAllocationType::Absolute,
+                false
+            }
+        );
         return id;
     }
 
@@ -257,16 +355,19 @@ public:
             FSSchedulerPeriodicTaskRepeatAllocationType::Absolute
     ) {
         const uint64_t id = next_id++;
-        TimedTaskRecord rec{
-            start_timestamp_ms,
-            id,
-            FSCallback(std::forward<F>(task)),
-            period_ms,
-            normalize_budget(priority),
-            allocation_type
-        };
+        const uint8_t budget = normalize_budget(priority);
+        TimedTaskRecord rec{start_timestamp_ms, id, budget};
         timed_heap.push(std::move(rec));
-        timed_task_states.emplace(id, TimedTaskState{true, false, true});
+        timed_task_states.emplace(
+            id,
+            TimedTaskState{
+                FSCallback(std::forward<F>(task)),
+                period_ms,
+                budget,
+                allocation_type,
+                period_ms != 0u
+            }
+        );
         return id;
     }
 

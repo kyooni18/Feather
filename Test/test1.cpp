@@ -1,6 +1,7 @@
 #include <Feather.hpp>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 
 namespace {
 uint64_t fake_now_ms_value = 0;
@@ -152,13 +153,51 @@ int main() {
     }
 
     {
+        FSTime instant_cancel_clock(fake_now_ms);
+        FSScheduler instant_cancel_scheduler(instant_cancel_clock);
+        int cancelled_instant_count = 0;
+        int live_instant_count = 0;
+
+        const auto cancelled_instant_id = instant_cancel_scheduler.add_instant_task(
+            [&cancelled_instant_count]() { ++cancelled_instant_count; },
+            3
+        );
+        instant_cancel_scheduler.add_instant_task(
+            [&live_instant_count]() { ++live_instant_count; },
+            0
+        );
+
+        if (!instant_cancel_scheduler.cancel_task(cancelled_instant_id)) {
+            std::cerr << "failed to cancel instant task\n";
+            return 1;
+        }
+        if (instant_cancel_scheduler.cancel_task(cancelled_instant_id)) {
+            std::cerr << "cancelled instant task twice\n";
+            return 1;
+        }
+
+        for (int i = 0; i < 3; ++i) {
+            instant_cancel_scheduler.step();
+        }
+        if (cancelled_instant_count != 0 || live_instant_count != 3) {
+            std::cerr << "instant cancellation should leave live tasks runnable\n";
+            return 1;
+        }
+    }
+
+    {
         FSTime timed_clock(fake_now_ms);
         FSScheduler timed_scheduler(timed_clock);
         int timed_order = 0;
         int low_timed_order = 0;
         int high_timed_order = 0;
+        int instant_after_timed_count = 0;
 
         fake_now_ms_value = 200;
+        timed_scheduler.add_instant_task(
+            [&instant_after_timed_count]() { ++instant_after_timed_count; },
+            15
+        );
         timed_scheduler.add_deferred_task(
             [&low_timed_order, &timed_order]() { low_timed_order = ++timed_order; },
             200,
@@ -171,8 +210,48 @@ int main() {
         );
 
         timed_scheduler.step();
-        if (high_timed_order != 1 || low_timed_order != 2) {
-            std::cerr << "timed tasks with matching fire time should use budget order\n";
+        if (high_timed_order != 1 || low_timed_order != 0 || instant_after_timed_count != 0) {
+            std::cerr << "first due timed task should be promoted to ready and run alone\n";
+            return 1;
+        }
+
+        timed_scheduler.step();
+        if (low_timed_order != 2 || instant_after_timed_count != 0) {
+            std::cerr << "second due timed task should remain ready for the next step\n";
+            return 1;
+        }
+
+        timed_scheduler.step();
+        if (instant_after_timed_count != 1) {
+            std::cerr << "instant task should run only after ready timed work drains\n";
+            return 1;
+        }
+    }
+
+    {
+        FSTime cancelled_timed_clock(fake_now_ms);
+        FSScheduler cancelled_timed_scheduler(cancelled_timed_clock);
+        int cancelled_timed_count = 0;
+        uint64_t cancelled_timed_ids[20] = {};
+
+        fake_now_ms_value = 300;
+        for (size_t i = 0; i < 20; ++i) {
+            cancelled_timed_ids[i] = cancelled_timed_scheduler.add_deferred_task(
+                [&cancelled_timed_count]() { ++cancelled_timed_count; },
+                300,
+                static_cast<uint8_t>(i)
+            );
+        }
+        for (uint64_t id : cancelled_timed_ids) {
+            if (!cancelled_timed_scheduler.cancel_task(id)) {
+                std::cerr << "failed to cancel timed task before rebuild\n";
+                return 1;
+            }
+        }
+
+        cancelled_timed_scheduler.step();
+        if (cancelled_timed_count != 0) {
+            std::cerr << "cancelled timed tasks should not execute after heap rebuild\n";
             return 1;
         }
     }
@@ -303,6 +382,55 @@ int main() {
     }
     if (feather.StartEvent(manual_event_index)) {
         std::cerr << "deleted manual event should not be restartable\n";
+        return 1;
+    }
+
+    bool move_only_pending = true;
+    int move_only_count = 0;
+    auto move_only_event = feather.Event(
+        [&move_only_pending](uint64_t) {
+            return move_only_pending;
+        },
+        [token = std::make_unique<int>(7), &move_only_pending, &move_only_count]() mutable {
+            move_only_count += *token;
+            move_only_pending = false;
+        },
+        1
+    );
+
+    feather.step();
+    if (move_only_count != 7) {
+        std::cerr << "move-only event task should dispatch without copying\n";
+        return 1;
+    }
+    if (!feather.DeleteEvent(move_only_event)) {
+        std::cerr << "failed to delete move-only event\n";
+        return 1;
+    }
+
+    bool self_delete_pending = true;
+    bool self_delete_result = false;
+    int self_delete_count = 0;
+    FSEventHandle self_delete_event;
+    self_delete_event = feather.Event(
+        [&self_delete_pending](uint64_t) {
+            return self_delete_pending;
+        },
+        [&feather, &self_delete_event, &self_delete_pending, &self_delete_result, &self_delete_count]() {
+            ++self_delete_count;
+            self_delete_pending = false;
+            self_delete_result = feather.DeleteEvent(self_delete_event);
+        },
+        2
+    );
+
+    feather.step();
+    if (!self_delete_result || self_delete_count != 1) {
+        std::cerr << "event should be able to delete itself during dispatch\n";
+        return 1;
+    }
+    if (feather.StartEvent(self_delete_event)) {
+        std::cerr << "self-deleted event should not be restartable\n";
         return 1;
     }
 
