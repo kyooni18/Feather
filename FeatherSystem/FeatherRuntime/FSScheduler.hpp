@@ -209,7 +209,6 @@ private:
     };
 
     std::vector<InstantTaskRecord> instant_task_records;
-    std::vector<InstantTaskRecord> pending_instant_task_records;
     size_t instant_rr_cursor = 0;
     uint8_t instant_rr_budget_remaining = 0;
     size_t active_instant_task_count = 0;
@@ -289,7 +288,6 @@ private:
     void enqueue_ready_callback(FSCallback&& task, uint8_t priority);
     bool run_one_ready_task();
     bool run_one_instant_task();
-    void flush_pending_instant_task_records();
     void maybe_compact_instant_task_records();
     void invoke_timed_ready_task(uint64_t task_id, uint32_t dispatch_epoch);
 
@@ -319,20 +317,7 @@ public:
     template<typename F>
     uint64_t add_instant_task(F&& task, uint8_t priority) {
         const uint64_t id = next_id++;
-        InstantTaskRecord record{
-            FSCallback(std::forward<F>(task)),
-            id,
-            normalize_budget(priority),
-            true,
-            false
-        };
-
-        if (instant_dispatch_depth == 0) {
-            instant_task_records.push_back(std::move(record));
-            ++active_instant_task_count;
-        } else {
-            pending_instant_task_records.push_back(std::move(record));
-        }
+        enqueue_ready_callback(FSCallback(std::forward<F>(task)), priority);
         return id;
     }
 
