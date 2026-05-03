@@ -141,12 +141,12 @@ int main() {
         budget_feather.InstantTask([&low_budget_count]() { ++low_budget_count; }, 0);
         budget_feather.InstantTask([&high_budget_count]() { ++high_budget_count; }, 3);
 
-        for (int i = 0; i < 10; ++i) {
+        for (int i = 0; i < 2; ++i) {
             budget_feather.step();
         }
 
-        if (low_budget_count != 2 || high_budget_count != 8) {
-            std::cerr << "instant tasks should use weighted budget slices: low="
+        if (low_budget_count != 1 || high_budget_count != 1) {
+            std::cerr << "instant tasks should execute once each from ready queue: low="
                       << low_budget_count << " high=" << high_budget_count << "\n";
             return 1;
         }
@@ -176,11 +176,11 @@ int main() {
             return 1;
         }
 
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < 2; ++i) {
             instant_cancel_scheduler.step();
         }
-        if (cancelled_instant_count != 0 || live_instant_count != 3) {
-            std::cerr << "instant cancellation should leave live tasks runnable\n";
+        if (cancelled_instant_count != 0 || live_instant_count != 1) {
+            std::cerr << "instant cancellation should only skip the cancelled queued task\n";
             return 1;
         }
     }
@@ -307,20 +307,20 @@ int main() {
         );
 
         timed_scheduler.step();
-        if (high_timed_order != 1 || low_timed_order != 0 || instant_after_timed_count != 0) {
-            std::cerr << "first due timed task should be promoted to ready and run alone\n";
+        if (high_timed_order != 0 || low_timed_order != 0 || instant_after_timed_count != 1) {
+            std::cerr << "instant task should execute first when already queued with higher budget\n";
             return 1;
         }
 
         timed_scheduler.step();
-        if (low_timed_order != 2 || instant_after_timed_count != 0) {
-            std::cerr << "second due timed task should remain ready for the next step\n";
+        if (high_timed_order != 1 || low_timed_order != 0 || instant_after_timed_count != 1) {
+            std::cerr << "highest-budget timed task should execute after instant task drains\n";
             return 1;
         }
 
         timed_scheduler.step();
-        if (instant_after_timed_count != 1) {
-            std::cerr << "instant task should run only after ready timed work drains\n";
+        if (low_timed_order != 2) {
+            std::cerr << "remaining timed task should execute on the following step\n";
             return 1;
         }
     }

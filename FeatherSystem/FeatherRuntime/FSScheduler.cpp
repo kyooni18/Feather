@@ -4,11 +4,7 @@ FSScheduler::FSScheduler(FSTime& clock_src)
     : clock(clock_src)
     , ready_task_queue{}
     , next_ready_sequence{0}
-    , instant_task_records{}
-    , instant_rr_cursor{0}
-    , instant_rr_budget_remaining{0}
-    , active_instant_task_count{0}
-    , instant_dispatch_depth{0}
+    , instant_task_states{}
     , timed_heap{}
     , cancelled_timed_task_count{0}
     , next_wakeup_time{0}
@@ -87,12 +83,14 @@ void FSScheduler::maybe_rebuild_cancelled_timed_heap() {
     rebuild_cancelled_timed_heap();
 }
 
-void FSScheduler::enqueue_ready_callback(FSCallback&& task, uint8_t priority) {
+void FSScheduler::enqueue_ready_callback(FSCallback&& task, uint8_t priority, uint64_t task_id, bool is_instant) {
     ready_task_queue.push(
         ReadyTaskRecord{
             std::move(task),
             normalize_budget(priority),
-            next_ready_sequence++
+            next_ready_sequence++,
+            task_id,
+            is_instant
         }
     );
 }
@@ -105,149 +103,25 @@ bool FSScheduler::run_one_ready_task() {
     ReadyTaskRecord record =
         std::move(const_cast<ReadyTaskRecord&>(ready_task_queue.top()));
     ready_task_queue.pop();
+    if (record.is_instant) {
+        auto instant_state = instant_task_states.find(record.task_id);
+        if (instant_state == instant_task_states.end()) {
+            return true;
+        }
+        const bool enabled = instant_state->second;
+        instant_task_states.erase(instant_state);
+        if (enabled && record.task) {
+            record.task();
+        }
+        return true;
+    }
+
     if (record.task) {
         record.task();
     }
     return true;
 }
 
-bool FSScheduler::run_one_instant_task() {
-    if (instant_dispatch_depth != 0) {
-        return false;
-    }
-
-    maybe_compact_instant_task_records();
-
-    if (active_instant_task_count == 0 || instant_task_records.empty()) {
-        return false;
-    }
-
-    size_t checked_records = 0;
-    while (checked_records < instant_task_records.size()) {
-        if (instant_rr_cursor >= instant_task_records.size()) {
-            instant_rr_cursor = 0;
-            instant_rr_budget_remaining = 0;
-        }
-
-        auto& rec = instant_task_records[instant_rr_cursor];
-        if (!rec.active || !rec.task) {
-            instant_rr_budget_remaining = 0;
-            instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
-            ++checked_records;
-            continue;
-        }
-
-        if (instant_rr_budget_remaining == 0) {
-            instant_rr_budget_remaining = slices_for_budget(rec.budget);
-        }
-
-        rec.dispatching = true;
-        ++instant_dispatch_depth;
-        rec.task();
-        --instant_dispatch_depth;
-        rec.dispatching = false;
-
-        if (!rec.active || !rec.task) {
-            rec.task = FSCallback{};
-            instant_rr_budget_remaining = 0;
-            instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
-            maybe_compact_instant_task_records();
-            return true;
-        }
-
-        --instant_rr_budget_remaining;
-        if (instant_rr_budget_remaining == 0) {
-            instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
-        }
-        maybe_compact_instant_task_records();
-        return true;
-    }
-
-    active_instant_task_count = 0;
-    instant_rr_cursor = 0;
-    instant_rr_budget_remaining = 0;
-    return false;
-}
-
-void FSScheduler::maybe_compact_instant_task_records() {
-    if (instant_dispatch_depth != 0) {
-        return;
-    }
-
-    if (active_instant_task_count == 0) {
-        instant_task_records.clear();
-        instant_task_records.shrink_to_fit();
-        instant_rr_cursor = 0;
-        instant_rr_budget_remaining = 0;
-        return;
-    }
-
-    if (instant_task_records.empty()) {
-        instant_rr_cursor = 0;
-        instant_rr_budget_remaining = 0;
-        return;
-    }
-
-    size_t active_count = 0;
-    for (const auto& record : instant_task_records) {
-        if (record.active && record.task) {
-            ++active_count;
-        }
-    }
-
-    active_instant_task_count = active_count;
-    if (active_count == 0) {
-        instant_task_records.clear();
-        instant_task_records.shrink_to_fit();
-        instant_rr_cursor = 0;
-        instant_rr_budget_remaining = 0;
-        return;
-    }
-
-    const size_t inactive_count = instant_task_records.size() - active_count;
-    const bool enough_inactive_records = inactive_count >= 16u;
-    const bool records_are_mostly_inactive =
-        inactive_count * 2u >= instant_task_records.size();
-
-    if (!enough_inactive_records && !records_are_mostly_inactive) {
-        if (instant_rr_cursor >= instant_task_records.size()) {
-            instant_rr_cursor = 0;
-            instant_rr_budget_remaining = 0;
-        }
-        return;
-    }
-
-    const size_t old_cursor = instant_rr_cursor;
-    size_t active_before_cursor = 0;
-    const size_t cursor_limit =
-        (old_cursor < instant_task_records.size()) ? old_cursor : instant_task_records.size();
-    for (size_t i = 0; i < cursor_limit; ++i) {
-        if (instant_task_records[i].active && instant_task_records[i].task) {
-            ++active_before_cursor;
-        }
-    }
-
-    size_t write_index = 0;
-    for (size_t read_index = 0; read_index < instant_task_records.size(); ++read_index) {
-        auto& record = instant_task_records[read_index];
-        if (!record.active || !record.task) {
-            continue;
-        }
-
-        if (write_index != read_index) {
-            instant_task_records[write_index] = std::move(record);
-        }
-        ++write_index;
-    }
-    instant_task_records.resize(write_index);
-    active_instant_task_count = write_index;
-    instant_rr_cursor = (active_before_cursor < write_index) ? active_before_cursor : 0;
-    instant_rr_budget_remaining = 0;
-
-    if (instant_task_records.size() * 4u < instant_task_records.capacity()) {
-        instant_task_records.shrink_to_fit();
-    }
-}
 
 void FSScheduler::invoke_timed_ready_task(uint64_t task_id, uint32_t dispatch_epoch) {
     auto state_it = timed_task_states.find(task_id);
@@ -364,28 +238,9 @@ bool FSScheduler::has_ready_tasks() const {
 }
 
 bool FSScheduler::cancel_task(uint64_t task_id) {
-    for (size_t i = 0; i < instant_task_records.size(); ++i) {
-        if (!instant_task_records[i].active || instant_task_records[i].id != task_id) {
-            continue;
-        }
-
-        instant_task_records[i].active = false;
-        if (!instant_task_records[i].dispatching) {
-            instant_task_records[i].task = FSCallback{};
-        }
-        if (active_instant_task_count > 0) {
-            --active_instant_task_count;
-        }
-        if (active_instant_task_count == 0) {
-            instant_rr_cursor = 0;
-            instant_rr_budget_remaining = 0;
-        } else {
-            instant_rr_budget_remaining = 0;
-            if (instant_rr_cursor >= instant_task_records.size()) {
-                instant_rr_cursor = 0;
-            }
-        }
-        maybe_compact_instant_task_records();
+    auto instant_state = instant_task_states.find(task_id);
+    if (instant_state != instant_task_states.end()) {
+        instant_task_states.erase(instant_state);
         return true;
     }
 
@@ -426,10 +281,9 @@ bool FSScheduler::set_task_enabled(uint64_t task_id, bool enabled) {
 }
 
 bool FSScheduler::is_task_enabled(uint64_t task_id) const {
-    for (const auto& record : instant_task_records) {
-        if (record.active && record.id == task_id) {
-            return true;
-        }
+    auto instant_state = instant_task_states.find(task_id);
+    if (instant_state != instant_task_states.end()) {
+        return instant_state->second;
     }
     auto state_it = timed_task_states.find(task_id);
     if (state_it == timed_task_states.end()) {
@@ -446,9 +300,7 @@ void FSScheduler::step() {
 
     promote_due_timed_tasks(now_ms);
 
-    if (!run_one_ready_task()) {
-        run_one_instant_task();
-    }
+    run_one_ready_task();
 
     maybe_shrink_timed_heap();
     calculate_next_wakeup_time_ms(now_ms);
