@@ -167,10 +167,6 @@ private:
         return static_cast<uint8_t>(priority & MaxBudget);
     }
 
-    static uint8_t slices_for_budget(uint8_t budget) {
-        return static_cast<uint8_t>((budget & MaxBudget) + 1u);
-    }
-
     // -----------------------------------------------------------------------
     // Ready queue — one-shot work scheduled by events or other runtime hooks.
     // Higher budgets run first; matching budgets preserve FIFO order.
@@ -179,6 +175,8 @@ private:
         FSCallback task;
         uint8_t    budget   = 0;
         uint64_t   sequence = 0;
+        uint64_t   task_id  = 0;
+        bool       is_instant = false;
     };
 
     struct ReadyTaskCmp {
@@ -195,25 +193,7 @@ private:
                         ReadyTaskCmp> ready_task_queue;
     uint64_t next_ready_sequence = 0;
 
-    // -----------------------------------------------------------------------
-    // Instant tasks — stored once in a flat vector; executed by a simple
-    // weighted round-robin cursor directly on the original records.
-    // A budget of 0 still receives 1 execution slice; 15 receives 16 slices.
-    // -----------------------------------------------------------------------
-    struct InstantTaskRecord {
-        FSCallback task;
-        uint64_t   id          = 0;
-        uint8_t    budget      = 0;
-        bool       active      = true;
-        bool       dispatching = false;
-    };
-
-    std::vector<InstantTaskRecord> instant_task_records;
-    std::vector<InstantTaskRecord> pending_instant_task_records;
-    size_t instant_rr_cursor = 0;
-    uint8_t instant_rr_budget_remaining = 0;
-    size_t active_instant_task_count = 0;
-    size_t instant_dispatch_depth = 0;
+    std::unordered_map<uint64_t, bool> instant_task_states;
 
     // -----------------------------------------------------------------------
     // Timed tasks — single min-heap keyed on next_fire_ms.
@@ -286,11 +266,8 @@ private:
     void maybe_rebuild_cancelled_timed_heap();
     void rebuild_cancelled_timed_heap();
     void promote_due_timed_tasks(uint64_t now_ms);
-    void enqueue_ready_callback(FSCallback&& task, uint8_t priority);
+    void enqueue_ready_callback(FSCallback&& task, uint8_t priority, uint64_t task_id = 0, bool is_instant = false);
     bool run_one_ready_task();
-    bool run_one_instant_task();
-    void flush_pending_instant_task_records();
-    void maybe_compact_instant_task_records();
     void invoke_timed_ready_task(uint64_t task_id, uint32_t dispatch_epoch);
 
 public:
@@ -307,8 +284,8 @@ public:
     // Each method accepts any void() callable directly — lambdas with
     // local-variable captures, functors, etc. — and wraps it into an
     // FSCallback. The external name is "priority"; internally it is stored as
-    // a 4-bit budget. Ready tasks use budget for ordering, instant tasks use it
-    // for weighted round-robin slices, and timed tasks use it to break ties.
+    // a 4-bit budget. Ready tasks use budget for ordering, instant tasks are
+    // enqueued directly into the ready queue, and timed tasks use it to break ties.
     // -----------------------------------------------------------------------
 
     template<typename F>
@@ -319,20 +296,8 @@ public:
     template<typename F>
     uint64_t add_instant_task(F&& task, uint8_t priority) {
         const uint64_t id = next_id++;
-        InstantTaskRecord record{
-            FSCallback(std::forward<F>(task)),
-            id,
-            normalize_budget(priority),
-            true,
-            false
-        };
-
-        if (instant_dispatch_depth == 0) {
-            instant_task_records.push_back(std::move(record));
-            ++active_instant_task_count;
-        } else {
-            pending_instant_task_records.push_back(std::move(record));
-        }
+        instant_task_states[id] = true;
+        enqueue_ready_callback(FSCallback(std::forward<F>(task)), priority, id, true);
         return id;
     }
 
