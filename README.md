@@ -74,3 +74,25 @@ std::cout << "count: " << count << std::endl;
 ## Future plans
 
 - some GUI stuffs for little more higher performance MCUs
+
+## Events module usage
+
+`Feather.hpp` is scheduler-only. Events are opt-in.
+
+```c++
+#include <Feather/Feather.hpp>
+#include <Feather/FeatherRuntime/FSEvents.hpp>
+
+Feather feather(now_ms_fn);
+FSEvents events(feather);
+
+auto h = events.add_event(
+  [](uint64_t now){ return (now % 1000) == 0; },
+  [](){ /* event task */ },
+  1
+);
+
+events.poll_all();      // manual polling
+// or
+// events.start_loop(1, 0); // periodic scheduler task loop
+```
