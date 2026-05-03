@@ -186,6 +186,103 @@ int main() {
     }
 
     {
+        FSTime self_cancel_clock(fake_now_ms);
+        FSScheduler self_cancel_scheduler(self_cancel_clock);
+        int self_cancel_runs = 0;
+        int live_callable_count = 0;
+        uint64_t self_cancel_id = 0;
+
+        struct SelfCancellingInstant {
+            FSScheduler* scheduler = nullptr;
+            uint64_t* id = nullptr;
+            int* runs = nullptr;
+            int* live_count = nullptr;
+            bool owns_lifetime = true;
+
+            SelfCancellingInstant(
+                FSScheduler* sched,
+                uint64_t* task_id,
+                int* run_counter,
+                int* live_counter
+            )
+                : scheduler(sched)
+                , id(task_id)
+                , runs(run_counter)
+                , live_count(live_counter) {
+                ++(*live_count);
+            }
+
+            SelfCancellingInstant(SelfCancellingInstant&& other) noexcept
+                : scheduler(other.scheduler)
+                , id(other.id)
+                , runs(other.runs)
+                , live_count(other.live_count)
+                , owns_lifetime(other.owns_lifetime) {
+                other.owns_lifetime = false;
+            }
+
+            SelfCancellingInstant(const SelfCancellingInstant&) = delete;
+            SelfCancellingInstant& operator=(const SelfCancellingInstant&) = delete;
+            SelfCancellingInstant& operator=(SelfCancellingInstant&&) = delete;
+
+            ~SelfCancellingInstant() {
+                if (owns_lifetime) {
+                    --(*live_count);
+                }
+            }
+
+            void operator()() {
+                ++(*runs);
+                scheduler->cancel_task(*id);
+            }
+        };
+
+        self_cancel_id = self_cancel_scheduler.add_instant_task(
+            SelfCancellingInstant{
+                &self_cancel_scheduler,
+                &self_cancel_id,
+                &self_cancel_runs,
+                &live_callable_count
+            },
+            0
+        );
+
+        self_cancel_scheduler.step();
+        self_cancel_scheduler.step();
+        if (self_cancel_runs != 1 || live_callable_count != 0) {
+            std::cerr << "self-cancelled instant task should run once and clean up\n";
+            return 1;
+        }
+    }
+
+    {
+        FSTime add_during_dispatch_clock(fake_now_ms);
+        FSScheduler add_during_dispatch_scheduler(add_during_dispatch_clock);
+        uint64_t first_id = 0;
+        int first_runs = 0;
+        int second_runs = 0;
+
+        first_id = add_during_dispatch_scheduler.add_instant_task(
+            [&]() {
+                ++first_runs;
+                add_during_dispatch_scheduler.cancel_task(first_id);
+                add_during_dispatch_scheduler.add_instant_task(
+                    [&]() { ++second_runs; },
+                    0
+                );
+            },
+            0
+        );
+
+        add_during_dispatch_scheduler.step();
+        add_during_dispatch_scheduler.step();
+        if (first_runs != 1 || second_runs != 1) {
+            std::cerr << "instant task added during dispatch should run after cleanup\n";
+            return 1;
+        }
+    }
+
+    {
         FSTime timed_clock(fake_now_ms);
         FSScheduler timed_scheduler(timed_clock);
         int timed_order = 0;

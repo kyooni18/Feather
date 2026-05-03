@@ -5,9 +5,11 @@ FSScheduler::FSScheduler(FSTime& clock_src)
     , ready_task_queue{}
     , next_ready_sequence{0}
     , instant_task_records{}
+    , pending_instant_task_records{}
     , instant_rr_cursor{0}
     , instant_rr_budget_remaining{0}
     , active_instant_task_count{0}
+    , instant_dispatch_depth{0}
     , timed_heap{}
     , cancelled_timed_task_count{0}
     , next_wakeup_time{0}
@@ -111,6 +113,13 @@ bool FSScheduler::run_one_ready_task() {
 }
 
 bool FSScheduler::run_one_instant_task() {
+    if (instant_dispatch_depth != 0) {
+        return false;
+    }
+
+    flush_pending_instant_task_records();
+    maybe_compact_instant_task_records();
+
     if (active_instant_task_count == 0 || instant_task_records.empty()) {
         return false;
     }
@@ -133,11 +142,28 @@ bool FSScheduler::run_one_instant_task() {
         if (instant_rr_budget_remaining == 0) {
             instant_rr_budget_remaining = slices_for_budget(rec.budget);
         }
+
+        rec.dispatching = true;
+        ++instant_dispatch_depth;
         rec.task();
+        --instant_dispatch_depth;
+        rec.dispatching = false;
+
+        if (!rec.active || !rec.task) {
+            rec.task = FSCallback{};
+            instant_rr_budget_remaining = 0;
+            instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
+            flush_pending_instant_task_records();
+            maybe_compact_instant_task_records();
+            return true;
+        }
+
         --instant_rr_budget_remaining;
         if (instant_rr_budget_remaining == 0) {
             instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
         }
+        flush_pending_instant_task_records();
+        maybe_compact_instant_task_records();
         return true;
     }
 
@@ -145,6 +171,100 @@ bool FSScheduler::run_one_instant_task() {
     instant_rr_cursor = 0;
     instant_rr_budget_remaining = 0;
     return false;
+}
+
+void FSScheduler::flush_pending_instant_task_records() {
+    if (pending_instant_task_records.empty() || instant_dispatch_depth != 0) {
+        return;
+    }
+
+    for (auto& record : pending_instant_task_records) {
+        if (record.active && record.task) {
+            ++active_instant_task_count;
+        }
+        instant_task_records.push_back(std::move(record));
+    }
+    pending_instant_task_records.clear();
+}
+
+void FSScheduler::maybe_compact_instant_task_records() {
+    if (instant_dispatch_depth != 0) {
+        return;
+    }
+
+    if (active_instant_task_count == 0) {
+        instant_task_records.clear();
+        instant_task_records.shrink_to_fit();
+        instant_rr_cursor = 0;
+        instant_rr_budget_remaining = 0;
+        return;
+    }
+
+    if (instant_task_records.empty()) {
+        instant_rr_cursor = 0;
+        instant_rr_budget_remaining = 0;
+        return;
+    }
+
+    size_t active_count = 0;
+    for (const auto& record : instant_task_records) {
+        if (record.active && record.task) {
+            ++active_count;
+        }
+    }
+
+    active_instant_task_count = active_count;
+    if (active_count == 0) {
+        instant_task_records.clear();
+        instant_task_records.shrink_to_fit();
+        instant_rr_cursor = 0;
+        instant_rr_budget_remaining = 0;
+        return;
+    }
+
+    const size_t inactive_count = instant_task_records.size() - active_count;
+    const bool enough_inactive_records = inactive_count >= 16u;
+    const bool records_are_mostly_inactive =
+        inactive_count * 2u >= instant_task_records.size();
+
+    if (!enough_inactive_records && !records_are_mostly_inactive) {
+        if (instant_rr_cursor >= instant_task_records.size()) {
+            instant_rr_cursor = 0;
+            instant_rr_budget_remaining = 0;
+        }
+        return;
+    }
+
+    const size_t old_cursor = instant_rr_cursor;
+    size_t active_before_cursor = 0;
+    const size_t cursor_limit =
+        (old_cursor < instant_task_records.size()) ? old_cursor : instant_task_records.size();
+    for (size_t i = 0; i < cursor_limit; ++i) {
+        if (instant_task_records[i].active && instant_task_records[i].task) {
+            ++active_before_cursor;
+        }
+    }
+
+    size_t write_index = 0;
+    for (size_t read_index = 0; read_index < instant_task_records.size(); ++read_index) {
+        auto& record = instant_task_records[read_index];
+        if (!record.active || !record.task) {
+            continue;
+        }
+
+        if (write_index != read_index) {
+            instant_task_records[write_index] = std::move(record);
+        }
+        ++write_index;
+    }
+    instant_task_records.resize(write_index);
+    active_instant_task_count = write_index;
+    instant_rr_cursor = (active_before_cursor < write_index) ? active_before_cursor : 0;
+    instant_rr_budget_remaining = 0;
+
+    if (instant_task_records.size() * 4u < instant_task_records.capacity()) {
+        instant_task_records.shrink_to_fit();
+    }
 }
 
 void FSScheduler::invoke_timed_ready_task(uint64_t task_id, uint32_t dispatch_epoch) {
@@ -268,7 +388,9 @@ bool FSScheduler::cancel_task(uint64_t task_id) {
         }
 
         instant_task_records[i].active = false;
-        instant_task_records[i].task = FSCallback{};
+        if (!instant_task_records[i].dispatching) {
+            instant_task_records[i].task = FSCallback{};
+        }
         if (active_instant_task_count > 0) {
             --active_instant_task_count;
         }
@@ -281,6 +403,17 @@ bool FSScheduler::cancel_task(uint64_t task_id) {
                 instant_rr_cursor = 0;
             }
         }
+        maybe_compact_instant_task_records();
+        return true;
+    }
+
+    for (auto& record : pending_instant_task_records) {
+        if (!record.active || record.id != task_id) {
+            continue;
+        }
+
+        record.active = false;
+        record.task = FSCallback{};
         return true;
     }
 
@@ -322,6 +455,11 @@ bool FSScheduler::set_task_enabled(uint64_t task_id, bool enabled) {
 
 bool FSScheduler::is_task_enabled(uint64_t task_id) const {
     for (const auto& record : instant_task_records) {
+        if (record.active && record.id == task_id) {
+            return true;
+        }
+    }
+    for (const auto& record : pending_instant_task_records) {
         if (record.active && record.id == task_id) {
             return true;
         }
