@@ -72,6 +72,7 @@ private:
     std::vector<size_t> enabled_dense_indices_;
     size_t active_event_count_ = 0;
     bool fixed_capacity_mode_ = false;
+    bool allow_dynamic_allocation_ = true;
 
     bool is_handle_live(FSEventHandle handle) const;
     void add_enabled_index(size_t index);
@@ -90,6 +91,7 @@ public:
 
     void reserve_events(size_t count);
     void set_fixed_capacity_mode(bool enabled);
+    void set_allow_dynamic_allocation(bool enabled) { allow_dynamic_allocation_ = enabled; }
 
     template<typename Condition, typename Task>
     FSEventHandle add_event(Condition&& condition, Task&& task, uint8_t priority, bool enabled = true) {
@@ -114,10 +116,12 @@ public:
             record.storage = record.inline_storage_ptr();
             new (record.storage) Storage{std::forward<Condition>(condition), std::forward<Task>(task)};
             record.uses_heap_storage = false;
-        } else {
+        } else if (allow_dynamic_allocation_) {
             record.storage = ::operator new(sizeof(Storage));
             new (record.storage) Storage{std::forward<Condition>(condition), std::forward<Task>(task)};
             record.uses_heap_storage = true;
+        } else {
+            return FSEventHandle::invalid();
         }
         record.ops = &ops;
         record.priority = static_cast<uint8_t>(priority & 0x0F);

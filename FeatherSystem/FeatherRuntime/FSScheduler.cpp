@@ -83,7 +83,10 @@ void FSScheduler::maybe_rebuild_cancelled_timed_heap() {
     rebuild_cancelled_timed_heap();
 }
 
-void FSScheduler::enqueue_ready_callback(FSCallback&& task, uint8_t priority, uint64_t task_id, bool is_instant) {
+bool FSScheduler::enqueue_ready_callback(FSCallback&& task, uint8_t priority, uint64_t task_id, bool is_instant) {
+    if (!task) {
+        return false;
+    }
     ready_task_queue.push(
         ReadyTaskRecord{
             std::move(task),
@@ -93,6 +96,7 @@ void FSScheduler::enqueue_ready_callback(FSCallback&& task, uint8_t priority, ui
             is_instant
         }
     );
+    return true;
 }
 
 bool FSScheduler::run_one_ready_task() {
