@@ -1,9 +1,25 @@
+# Build output
 build/
+dist/
+
+# Local caches and editor state
 .cache/
 .env
-.DS_Store
-dist/
 .idea/
--.o
 .vscode/
 
+# macOS and temporary files
+.DS_Store
+**/.DS_Store
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+-.o
+
+# Local test binaries
+Test/a.out
+Test/test1

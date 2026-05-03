@@ -1,0 +1,22 @@
+# Keep generated artifacts out of Codex context scans.
+.git/
+build/
+dist/
+.cache/
+.idea/
+.vscode/
+
+# Local OS/editor noise.
+.DS_Store
+**/.DS_Store
+
+# Compiled objects, libraries, and test binaries.
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+Test/a.out
+Test/test1

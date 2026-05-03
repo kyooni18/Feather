@@ -4,9 +4,9 @@
 #include <cstdint>
 #include <utility>
 
-#include "FeatherRuntime/FSTime.hpp"
-#include "FeatherRuntime/FSScheduler.hpp"
-#include "FeatherRuntime/FSEvent.hpp"
+#include "Core/Clock.hpp"
+#include "Scheduler/Scheduler.hpp"
+#include "Events/Event.hpp"
 
 // ---------------------------------------------------------------------------
 // Feather – public API facade

@@ -4,18 +4,36 @@ Feather is a utility Library, mainly for embedded environments.
 Starts from single-threaded scheduler, expanding to GUI and so on.
 
 ## Currently available modules:
-FSTime: Contains wrapper of time/clock functions. Used to track time flow with universal method.
-- now_ms must be uint64_t function.
+Feather keeps `Feather.hpp` as the top-level user API. Internally the public
+headers and build targets are organized as these module boundaries:
 
-FSScheduler: single-threaded, cooperative scheduler.
-- Supports running tasks needed to be executed at certain time, or executed regularly.
-- Budget/cycle system based on tasks' priority. (0~15, Packed into 8bit int)
-- Individual IDs for Tasks. (uint64_t)
-- Does not engross entire running loop, being executed only if step() is called.
+- `Core`: clock abstraction. `FSTime` remains the v1 public type name and is
+  available through `Core/Clock.hpp`.
+- `Scheduler`: single-threaded cooperative scheduler. `FSScheduler` owns
+  task/ready/timed/instant execution policy, one-step-per-step dispatch,
+  priority budget execution, and `uint64_t` task IDs.
+- `Events`: optional event layer above the scheduler. `FSEvent/FSEvents` poll
+  from `Feather::step()` and dispatch matched work through the scheduler ready
+  queue.
+- `UI`: optional display helpers. These are not part of the core runtime
+  dependency.
+- `Platform`: reserved boundary for platform adapters.
+
+Compatibility headers under `FeatherRuntime/` are still installed so existing
+code can keep including the old paths.
+
+### CMake targets
+
+- `Feather::Core`
+- `Feather::Scheduler`
+- `Feather::Events`
+- `Feather::Feather`
+- `Feather::Shared`
+- `Feather::UI`
 
 ## Simple usage:
 ``` C++
-#include <Feather.h> // install with "sudo make install"
+#include <Feather/Feather.hpp> // install with "sudo make install"
 
 // ... other codes..
 

@@ -1,3 +1,8 @@
 @PACKAGE_INIT@
 
 include("${CMAKE_CURRENT_LIST_DIR}/FeatherTargets.cmake")
+
+if(TARGET Feather::Feather AND NOT TARGET Feather::Static)
+  add_library(Feather::Static INTERFACE IMPORTED)
+  target_link_libraries(Feather::Static INTERFACE Feather::Feather)
+endif()
