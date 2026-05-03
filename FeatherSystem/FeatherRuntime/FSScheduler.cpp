@@ -5,7 +5,6 @@ FSScheduler::FSScheduler(FSTime& clock_src)
     , ready_task_queue{}
     , next_ready_sequence{0}
     , instant_task_records{}
-    , pending_instant_task_records{}
     , instant_rr_cursor{0}
     , instant_rr_budget_remaining{0}
     , active_instant_task_count{0}
@@ -117,7 +116,6 @@ bool FSScheduler::run_one_instant_task() {
         return false;
     }
 
-    flush_pending_instant_task_records();
     maybe_compact_instant_task_records();
 
     if (active_instant_task_count == 0 || instant_task_records.empty()) {
@@ -153,7 +151,6 @@ bool FSScheduler::run_one_instant_task() {
             rec.task = FSCallback{};
             instant_rr_budget_remaining = 0;
             instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
-            flush_pending_instant_task_records();
             maybe_compact_instant_task_records();
             return true;
         }
@@ -162,7 +159,6 @@ bool FSScheduler::run_one_instant_task() {
         if (instant_rr_budget_remaining == 0) {
             instant_rr_cursor = (instant_rr_cursor + 1) % instant_task_records.size();
         }
-        flush_pending_instant_task_records();
         maybe_compact_instant_task_records();
         return true;
     }
@@ -171,20 +167,6 @@ bool FSScheduler::run_one_instant_task() {
     instant_rr_cursor = 0;
     instant_rr_budget_remaining = 0;
     return false;
-}
-
-void FSScheduler::flush_pending_instant_task_records() {
-    if (pending_instant_task_records.empty() || instant_dispatch_depth != 0) {
-        return;
-    }
-
-    for (auto& record : pending_instant_task_records) {
-        if (record.active && record.task) {
-            ++active_instant_task_count;
-        }
-        instant_task_records.push_back(std::move(record));
-    }
-    pending_instant_task_records.clear();
 }
 
 void FSScheduler::maybe_compact_instant_task_records() {
@@ -407,16 +389,6 @@ bool FSScheduler::cancel_task(uint64_t task_id) {
         return true;
     }
 
-    for (auto& record : pending_instant_task_records) {
-        if (!record.active || record.id != task_id) {
-            continue;
-        }
-
-        record.active = false;
-        record.task = FSCallback{};
-        return true;
-    }
-
     auto state_it = timed_task_states.find(task_id);
     if (state_it == timed_task_states.end() || state_it->second.cancelled) {
         return false;
@@ -459,12 +431,6 @@ bool FSScheduler::is_task_enabled(uint64_t task_id) const {
             return true;
         }
     }
-    for (const auto& record : pending_instant_task_records) {
-        if (record.active && record.id == task_id) {
-            return true;
-        }
-    }
-
     auto state_it = timed_task_states.find(task_id);
     if (state_it == timed_task_states.end()) {
         return false;
