@@ -6,7 +6,6 @@
 
 #include "Core/Clock.hpp"
 #include "Scheduler/Scheduler.hpp"
-#include "Events/Event.hpp"
 
 // ---------------------------------------------------------------------------
 // Feather – public API facade
@@ -23,23 +22,19 @@ class Feather {
 
 public:
     FSScheduler scheduler;
-    FSEvents events;
     uint64_t (*now_ms)();
 
     Feather()
         : clock([]() -> uint64_t { return 0; })
         , scheduler(clock)
-        , events(&scheduler)
         , now_ms([]() -> uint64_t { return 0; }) {}
 
     explicit Feather(uint64_t (*current_time_ms_)())
         : clock(current_time_ms_)
         , scheduler(clock)
-        , events(&scheduler)
         , now_ms(current_time_ms_) {}
 
     void step() {
-        events.poll_all();
         scheduler.step();
     }
 
@@ -78,32 +73,4 @@ public:
             std::forward<F>(task), now_ms() + time_to_run, repeat_cycle, priority, allocation_type);
     }
 
-    template<typename Condition, typename Task>
-    FSEventHandle Event(
-        Condition&& condition,
-        Task&&      task,
-        uint8_t     priority,
-        bool        enabled = true
-    ) {
-        return events.add_event(
-            FSEvent::make(
-                std::forward<Condition>(condition),
-                std::forward<Task>(task),
-                priority,
-                enabled
-            )
-        );
-    }
-
-    bool StartEvent(FSEventHandle event_id) {
-        return events.start_event(event_id);
-    }
-
-    bool StopEvent(FSEventHandle event_id) {
-        return events.stop_event(event_id);
-    }
-
-    bool DeleteEvent(FSEventHandle event_id) {
-        return events.delete_event(event_id);
-    }
 };

@@ -20,6 +20,7 @@ set(FEATHER_SCHEDULER_SOURCES
 )
 
 set(FEATHER_EVENT_SOURCES
+  FeatherSystem/FeatherRuntime/FSEvents.cpp
 )
 
 set(FEATHER_FACADE_SOURCES
@@ -49,6 +50,7 @@ set(FEATHER_UI_HEADERS
 
 set(FEATHER_COMPAT_HEADERS
   FeatherSystem/FeatherRuntime/FSEvent.hpp
+  FeatherSystem/FeatherRuntime/FSEvents.hpp
   FeatherSystem/FeatherRuntime/FSScheduler.hpp
   FeatherSystem/FeatherRuntime/FSTime.hpp
 )
@@ -87,22 +89,19 @@ target_link_libraries(FeatherScheduler PUBLIC FeatherCore)
 feather_configure_public_target(FeatherScheduler)
 feather_configure_warning_target(FeatherScheduler)
 
-add_library(FeatherEvents INTERFACE)
+add_library(FeatherEvents STATIC ${FEATHER_EVENT_SOURCES})
 add_library(Feather::Events ALIAS FeatherEvents)
 set_target_properties(FeatherEvents PROPERTIES
   EXPORT_NAME Events
 )
-target_link_libraries(FeatherEvents INTERFACE FeatherScheduler)
-target_include_directories(FeatherEvents INTERFACE
-  "$<BUILD_INTERFACE:${FEATHER_PUBLIC_INCLUDE_DIR}>"
-  "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-)
+target_link_libraries(FeatherEvents PUBLIC FeatherScheduler)
+feather_configure_public_target(FeatherEvents)
+feather_configure_warning_target(FeatherEvents)
 
 set(FEATHER_ALL_RUNTIME_SOURCES
   ${FEATHER_FACADE_SOURCES}
   ${FEATHER_CORE_SOURCES}
   ${FEATHER_SCHEDULER_SOURCES}
-  ${FEATHER_EVENT_SOURCES}
 )
 
 add_library(FeatherStatic STATIC ${FEATHER_ALL_RUNTIME_SOURCES})
