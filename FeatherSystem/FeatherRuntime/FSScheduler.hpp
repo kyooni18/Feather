@@ -36,6 +36,10 @@ enum FSSchedulerPeriodicTaskRepeatAllocationType {
     Absolute
 };
 
+struct FSDynamicAllocationOptions {
+    bool allow_dynamic_allocation = true;
+};
+
 // ---------------------------------------------------------------------------
 // FSCallback – lightweight move-only callable wrapper
 //
@@ -60,7 +64,7 @@ struct FSCallback {
 
     template<typename F,
              typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, FSCallback>>>
-    explicit FSCallback(F&& f) {
+    explicit FSCallback(F&& f, bool allow_dynamic_allocation = true) {
         using Decay = std::decay_t<F>;
         invoke_f = [](void* p) { (*static_cast<Decay*>(p))(); };
         destroy_f = [](void* p) { static_cast<Decay*>(p)->~Decay(); };
@@ -73,11 +77,17 @@ struct FSCallback {
             ctx = inline_storage_;
             new (ctx) Decay(std::forward<F>(f));
             uses_heap_storage = false;
-        } else {
+        } else if (allow_dynamic_allocation) {
             auto* heap = new Decay(std::forward<F>(f));
             ctx = heap;
             destroy_f = [](void* p) { delete static_cast<Decay*>(p); };
             uses_heap_storage = true;
+        } else {
+            ctx = nullptr;
+            invoke_f = nullptr;
+            destroy_f = nullptr;
+            move_f = nullptr;
+            uses_heap_storage = false;
         }
     }
 
@@ -160,6 +170,7 @@ class FSScheduler {
 private:
 
     FSTime clock;
+    FSDynamicAllocationOptions dynamic_allocation_options_{};
 
     static constexpr uint8_t MaxBudget = 0x0F;
 
@@ -266,13 +277,15 @@ private:
     void maybe_rebuild_cancelled_timed_heap();
     void rebuild_cancelled_timed_heap();
     void promote_due_timed_tasks(uint64_t now_ms);
-    void enqueue_ready_callback(FSCallback&& task, uint8_t priority, uint64_t task_id = 0, bool is_instant = false);
+    bool enqueue_ready_callback(FSCallback&& task, uint8_t priority, uint64_t task_id = 0, bool is_instant = false);
     bool run_one_ready_task();
     void invoke_timed_ready_task(uint64_t task_id, uint32_t dispatch_epoch);
 
 public:
 
     explicit FSScheduler(FSTime& clock_src);
+    void set_dynamic_allocation_options(FSDynamicAllocationOptions options) { dynamic_allocation_options_ = options; }
+    FSDynamicAllocationOptions dynamic_allocation_options() const { return dynamic_allocation_options_; }
 
     uint64_t now_ms() {
         return clock.now_ms();
@@ -289,15 +302,26 @@ public:
     // -----------------------------------------------------------------------
 
     template<typename F>
-    void enqueue_ready_task(F&& task, uint8_t priority) {
-        enqueue_ready_callback(FSCallback(std::forward<F>(task)), priority);
+    bool enqueue_ready_task(F&& task, uint8_t priority) {
+        FSCallback callback(std::forward<F>(task), dynamic_allocation_options_.allow_dynamic_allocation);
+        if (!callback) {
+            return false;
+        }
+        return enqueue_ready_callback(std::move(callback), priority);
     }
 
     template<typename F>
     uint64_t add_instant_task(F&& task, uint8_t priority) {
         const uint64_t id = next_id++;
+        FSCallback callback(std::forward<F>(task), dynamic_allocation_options_.allow_dynamic_allocation);
+        if (!callback) {
+            return 0;
+        }
         instant_task_states[id] = true;
-        enqueue_ready_callback(FSCallback(std::forward<F>(task)), priority, id, true);
+        if (!enqueue_ready_callback(std::move(callback), priority, id, true)) {
+            instant_task_states.erase(id);
+            return 0;
+        }
         return id;
     }
 
@@ -305,12 +329,16 @@ public:
     uint64_t add_deferred_task(F&& task, uint64_t timestamp_ms, uint8_t priority) {
         const uint64_t id = next_id++;
         const uint8_t budget = normalize_budget(priority);
+        FSCallback callback(std::forward<F>(task), dynamic_allocation_options_.allow_dynamic_allocation);
+        if (!callback) {
+            return 0;
+        }
         TimedTaskRecord rec{timestamp_ms, id, budget};
         timed_heap.push(std::move(rec));
         timed_task_states.emplace(
             id,
             TimedTaskState{
-                FSCallback(std::forward<F>(task)),
+                std::move(callback),
                 0u,
                 budget,
                 FSSchedulerPeriodicTaskRepeatAllocationType::Absolute,
@@ -331,12 +359,16 @@ public:
     ) {
         const uint64_t id = next_id++;
         const uint8_t budget = normalize_budget(priority);
+        FSCallback callback(std::forward<F>(task), dynamic_allocation_options_.allow_dynamic_allocation);
+        if (!callback) {
+            return 0;
+        }
         TimedTaskRecord rec{start_timestamp_ms, id, budget};
         timed_heap.push(std::move(rec));
         timed_task_states.emplace(
             id,
             TimedTaskState{
-                FSCallback(std::forward<F>(task)),
+                std::move(callback),
                 period_ms,
                 budget,
                 allocation_type,
